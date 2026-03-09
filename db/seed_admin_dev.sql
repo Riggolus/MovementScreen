@@ -1,0 +1,9 @@
+-- DEV-ONLY admin seed script — delete this user when done tweaking thresholds.
+--
+-- This file is intentionally left WITHOUT a hashed password.
+-- Run the Python helper instead, which uses the same bcrypt settings as the app:
+--
+--   py db/seed_admin_dev.py
+--
+-- Or register via the API and promote manually:
+--   UPDATE users SET is_admin = TRUE WHERE email = 'admin@admin.com';

@@ -148,6 +148,9 @@
         </div>
       </div>
 
+      <!-- ── Instructions (populated by JS) ──────────────── -->
+      <div id="instructions-card" class="card"></div>
+
       <div class="card tips-card">
         <h2 class="card-title">Before you start</h2>
         <ul class="tips-list">
@@ -168,6 +171,10 @@
       <div class="camera-wrap">
         <video id="preview" autoplay muted playsinline></video>
         <canvas id="skeleton-canvas"></canvas>
+        <div id="countdown-overlay" class="countdown-overlay hidden">
+          <div id="countdown-num" class="countdown-num">5</div>
+          <p class="countdown-label">Get into position</p>
+        </div>
         <div class="camera-ui">
           <div class="rec-indicator">
             <span class="rec-dot"></span>
@@ -204,6 +211,12 @@
 
     <!-- ── VIEW: HISTORY ────────────────────────────────── -->
     <div id="view-history" class="view"></div>
+
+    <!-- ── VIEW: ADMIN ──────────────────────────────────── -->
+    <div id="view-admin" class="view"></div>
+
+    <!-- ── VIEW: REPORT ─────────────────────────────────── -->
+    <div id="view-report" class="view"></div>
 
     <!-- ── VIEW: ERROR ──────────────────────────────────── -->
     <div id="view-error" class="view">

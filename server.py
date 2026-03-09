@@ -31,6 +31,8 @@ from movementscreen.config import settings
 from movementscreen.database import (
     close_pool,
     create_user,
+    delete_threshold,
+    get_all_thresholds,
     get_assessment_detail,
     get_pool,
     get_progress,
@@ -39,6 +41,13 @@ from movementscreen.database import (
     init_pool,
     list_assessments,
     save_assessment,
+    upsert_threshold,
+)
+from movementscreen.thresholds import (
+    DESCRIPTIONS,
+    ThresholdConfig,
+    get_thresholds,
+    invalidate_threshold_cache,
 )
 from movementscreen.pose.estimator import PoseEstimator
 from movementscreen.screens.lunge import LungeScreen
@@ -72,13 +81,20 @@ app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
 _oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
-async def get_current_user(token: Optional[str] = Depends(_oauth2)) -> dict:
+async def get_current_user(token: Optional[str] = Depends(_oauth2)) -> dict:  # noqa: E501
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Not authenticated.")
     user_id = decode_access_token(token)
     user = await get_user_by_id(get_pool(), user_id)
     if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="User not found.")
+    return user
+
+
+async def get_admin_user(token: Optional[str] = Depends(_oauth2)) -> dict:
+    user = await get_current_user(token)
+    if not user.get("is_admin"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Admin access required.")
     return user
 
 
@@ -123,7 +139,7 @@ async def register(body: RegisterBody):
     user = await create_user(pool, body.email, body.name, hash_password(body.password))
     uid = str(user["id"])
     return {
-        "user": {"id": uid, "email": user["email"], "name": user["name"]},
+        "user": {"id": uid, "email": user["email"], "name": user["name"], "is_admin": False},
         "access_token": create_access_token(uid),
         "refresh_token": create_refresh_token(uid),
     }
@@ -137,7 +153,7 @@ async def login(body: LoginBody):
         raise HTTPException(401, detail="Invalid email or password.")
     uid = str(user["id"])
     return {
-        "user": {"id": uid, "email": user["email"], "name": user["name"]},
+        "user": {"id": uid, "email": user["email"], "name": user["name"], "is_admin": user.get("is_admin", False)},
         "access_token": create_access_token(uid),
         "refresh_token": create_refresh_token(uid),
     }
@@ -154,7 +170,12 @@ async def refresh_token(body: RefreshBody):
 
 @app.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
-    return {"id": str(user["id"]), "email": user["email"], "name": user["name"]}
+    return {
+        "id": str(user["id"]),
+        "email": user["email"],
+        "name": user["name"],
+        "is_admin": user.get("is_admin", False),
+    }
 
 
 # ── Assessment routes ─────────────────────────────────────
@@ -185,6 +206,63 @@ async def get_assessment(
 @app.get("/progress")
 async def progress(user: dict = Depends(get_current_user)):
     return await get_progress(get_pool(), str(user["id"]))
+
+
+# ── Admin threshold routes ────────────────────────────────
+
+class ThresholdUpdate(BaseModel):
+    updates: dict[str, float]
+
+
+@app.get("/admin/thresholds")
+async def admin_list_thresholds(admin: dict = Depends(get_admin_user)):
+    """Return all thresholds with their current value, default, and override metadata."""
+    current = await get_thresholds(get_pool())
+    db_rows = {r["key"]: r for r in await get_all_thresholds(get_pool())}
+    defaults = ThresholdConfig()
+
+    result = {}
+    for key, value in current.as_dict().items():
+        db_row = db_rows.get(key)
+        result[key] = {
+            "value": value,
+            "default": defaults.default_for(key),
+            "is_overridden": key in db_rows,
+            "description": DESCRIPTIONS.get(key, ""),
+            "updated_at": db_row["updated_at"].isoformat() if db_row else None,
+        }
+    return {"thresholds": result}
+
+
+@app.patch("/admin/thresholds")
+async def admin_update_thresholds(
+    body: ThresholdUpdate,
+    admin: dict = Depends(get_admin_user),
+):
+    """Override one or more thresholds. Unknown keys are rejected."""
+    valid_keys = set(ThresholdConfig().as_dict())
+    invalid = [k for k in body.updates if k not in valid_keys]
+    if invalid:
+        raise HTTPException(400, detail=f"Unknown threshold key(s): {invalid}")
+
+    pool = get_pool()
+    for key, value in body.updates.items():
+        await upsert_threshold(pool, key, value, DESCRIPTIONS.get(key))
+
+    invalidate_threshold_cache()
+    return {"updated": list(body.updates.keys())}
+
+
+@app.delete("/admin/thresholds/{key}")
+async def admin_reset_threshold(key: str, admin: dict = Depends(get_admin_user)):
+    """Remove a DB override so the hardcoded default is used again."""
+    defaults = ThresholdConfig()
+    if key not in defaults.as_dict():
+        raise HTTPException(400, detail=f"Unknown threshold key: {key!r}")
+
+    await delete_threshold(get_pool(), key)
+    invalidate_threshold_cache()
+    return {"reset": key, "default": defaults.default_for(key)}
 
 
 # ── Analysis route ────────────────────────────────────────
@@ -244,13 +322,16 @@ async def analyse(
             movement_screen = OverheadReachScreen()
 
         config = PipelineConfig(skip_frames=1, draw_landmarks=False, show_preview=False)
+        thresholds = await get_thresholds(get_pool())
 
         def _run():
             with PoseEstimator(model_complexity=model_complexity) as estimator:
                 frames = collect_frames(
                     iter_frames_from_file(tmp_path, estimator, config=config)
                 )
-            return None if not frames else movement_screen.run(frames)
+            return None if not frames else movement_screen.run(
+                frames, camera_angle=camera_angle, thresholds=thresholds
+            )
 
         result = await asyncio.get_event_loop().run_in_executor(None, _run)
 

@@ -6,7 +6,9 @@ from movementscreen.screens.base_screen import BaseScreen
 
 # Gate: only analyse frames where the knee flexion exceeds this angle
 # (i.e., the subject is at or near the bottom of the squat).
-SQUAT_DEPTH_THRESHOLD_DEGREES = 130.0  # knee angle < 130° → at depth
+# 115° is roughly parallel or below — strict enough to exclude early descent
+# and ascent transition frames that inflate compensation scores.
+SQUAT_DEPTH_THRESHOLD_DEGREES = 115.0  # knee angle < 115° → at depth
 
 
 class SquatScreen(BaseScreen):
@@ -26,6 +28,10 @@ class SquatScreen(BaseScreen):
     @property
     def name(self) -> str:
         return "Bodyweight Squat"
+
+    @property
+    def screen_type(self) -> str:
+        return "squat"
 
     def accept_frame(self, frame: PoseFrame) -> bool:
         if not self._at_depth_only:

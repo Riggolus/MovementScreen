@@ -9,5 +9,7 @@
     <include file="changes/002-create-assessments.xml" relativeToChangelogFile="true"/>
     <include file="changes/003-create-findings.xml"    relativeToChangelogFile="true"/>
     <include file="changes/004-create-angle-stats.xml" relativeToChangelogFile="true"/>
+    <include file="changes/005-add-is-admin-to-users.xml"    relativeToChangelogFile="true"/>
+    <include file="changes/006-create-threshold-config.xml"  relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

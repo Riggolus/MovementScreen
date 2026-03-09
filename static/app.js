@@ -105,6 +105,8 @@ const views = {
   processing: document.getElementById('view-processing'),
   results:    document.getElementById('view-results'),
   history:    document.getElementById('view-history'),
+  admin:      document.getElementById('view-admin'),
+  report:     document.getElementById('view-report'),
   error:      document.getElementById('view-error'),
 };
 const preview        = document.getElementById('preview');
@@ -131,11 +133,17 @@ function updateHeader() {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       History
     </button>
+    ${authUser.is_admin ? `
+    <button class="nav-btn" id="nav-admin-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      Thresholds
+    </button>` : ''}
     <span class="user-chip">${authUser.name.split(' ')[0]}</span>
     <button class="nav-btn danger" id="nav-logout-btn">Log out</button>
   `;
   document.getElementById('nav-history-btn').addEventListener('click', loadHistory);
   document.getElementById('nav-logout-btn').addEventListener('click', logout);
+  document.getElementById('nav-admin-btn')?.addEventListener('click', loadAdminPage);
 }
 
 function logout() {
@@ -215,6 +223,62 @@ document.getElementById('register-form').addEventListener('submit', async e => {
   }
 });
 
+// ── Assessment instructions ───────────────────────────────
+const SCREEN_INSTRUCTIONS = {
+  squat: {
+    title: 'Bodyweight Squat',
+    desc: 'Stand with feet shoulder-width apart, toes slightly turned out. Push your hips back and bend your knees to lower as far as comfortable, keeping your heels flat throughout.',
+    cues: [
+      'Feet shoulder-width apart, toes 15–30° outward',
+      'Keep heels flat — do not let them rise',
+      'Drive knees out in line with your toes',
+      'Lower until thighs are parallel (or as deep as comfortable)',
+      'Perform 3–5 slow, controlled reps',
+    ],
+    camera: 'Anterior view: best for knee valgus and trunk shift. Lateral view: best for ankle mobility and trunk lean.',
+  },
+  lunge: {
+    title: 'Forward Lunge',
+    desc: (side) => `Step forward with your <strong>${side}</strong> foot into a lunge. Lower your rear knee toward the ground, keeping your front shin as vertical as possible and your torso upright.`,
+    cues: (side) => [
+      `Step forward with your ${side} foot`,
+      'Keep your front shin vertical — knee over ankle',
+      'Lower your rear knee toward (not onto) the floor',
+      'Keep your torso upright — avoid leaning forward',
+      'Push back to start and perform 3–5 controlled reps',
+    ],
+    camera: 'Anterior view recommended for knee tracking and trunk shift.',
+  },
+  overhead: {
+    title: 'Overhead Reach',
+    desc: 'Stand tall and raise both arms directly overhead as high as possible. Keep your core braced and avoid arching your lower back. Lower with control and repeat.',
+    cues: [
+      'Stand with feet hip-width apart',
+      'Raise both arms simultaneously, reaching as high as possible',
+      'Keep your lower back neutral — do not arch or flare your ribs',
+      'Aim to get arms fully vertical beside your ears',
+      'Perform 3–5 slow, controlled reps',
+    ],
+    camera: 'Anterior view: captures shoulder asymmetry. Lateral view: captures trunk extension compensation.',
+  },
+};
+
+function renderInstructions(screen, side) {
+  const card  = document.getElementById('instructions-card');
+  const instr = SCREEN_INSTRUCTIONS[screen];
+  if (!instr) { card.innerHTML = ''; return; }
+
+  const desc = typeof instr.desc === 'function' ? instr.desc(side) : instr.desc;
+  const cues = typeof instr.cues === 'function' ? instr.cues(side) : instr.cues;
+
+  card.innerHTML = `
+    <h3 class="instructions-title">${instr.title}</h3>
+    <p class="instructions-desc">${desc}</p>
+    <ul class="instructions-cues">${cues.map(c => `<li>${c}</li>`).join('')}</ul>
+    <p class="instructions-camera">📐 ${instr.camera}</p>
+  `;
+}
+
 // ── Screen / angle / side selectors ──────────────────────
 document.querySelectorAll('.screen-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -222,6 +286,7 @@ document.querySelectorAll('.screen-btn').forEach(btn => {
     btn.classList.add('active');
     currentScreen = btn.dataset.screen;
     lungeOptions.classList.toggle('hidden', currentScreen !== 'lunge');
+    renderInstructions(currentScreen, currentSide);
   });
 });
 
@@ -238,8 +303,36 @@ document.querySelectorAll('.toggle-btn').forEach(btn => {
     document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentSide = btn.dataset.side;
+    renderInstructions(currentScreen, currentSide);
   });
 });
+
+// Initialise instructions on load
+renderInstructions('squat', 'left');
+
+// ── Countdown ─────────────────────────────────────────────
+let countdownActive = false;
+
+async function runCountdown() {
+  countdownActive = true;
+  const overlay = document.getElementById('countdown-overlay');
+  const numEl   = document.getElementById('countdown-num');
+  overlay.classList.remove('hidden');
+
+  for (let i = 5; i >= 1; i--) {
+    if (!countdownActive) break;
+    numEl.textContent = i;
+    numEl.classList.remove('pop');
+    void numEl.offsetWidth; // force reflow to restart animation
+    numEl.classList.add('pop');
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  overlay.classList.add('hidden');
+  const completed = countdownActive;
+  countdownActive = false;
+  return completed;
+}
 
 // ── Recording ─────────────────────────────────────────────
 document.getElementById('start-btn').addEventListener('click', startRecording);
@@ -273,6 +366,11 @@ async function startRecording() {
   recordedChunks = [];
   mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
   mediaRecorder.onstop = uploadAndAnalyse;
+
+  // Countdown — user can see themselves and get into position
+  const started = await runCountdown();
+  if (!started) return; // cancelled during countdown
+
   mediaRecorder.start(100);
   startTimer();
 }
@@ -281,7 +379,7 @@ async function startRecording() {
 function startSkeletonLoop() {
   let lastTs = -1;
   function loop() {
-    if (!poseLandmarker || !mediaRecorder || mediaRecorder.state === 'inactive') return;
+    if (!poseLandmarker) return;
     const { offsetWidth: w, offsetHeight: h } = skeletonCanvas;
     if (skeletonCanvas.width !== w || skeletonCanvas.height !== h) {
       skeletonCanvas.width = w; skeletonCanvas.height = h;
@@ -328,6 +426,8 @@ function stopRecording() {
 }
 
 document.getElementById('cancel-btn').addEventListener('click', () => {
+  countdownActive = false; // abort countdown if running
+  document.getElementById('countdown-overlay').classList.add('hidden');
   stopTimer(); stopSkeletonLoop();
   if (mediaRecorder?.state !== 'inactive') mediaRecorder.stop();
   mediaStream?.getTracks().forEach(t => t.stop());
@@ -455,7 +555,11 @@ function renderResults(data) {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.45"/></svg>
           Record Again
         </button>
-        ${authUser ? `<button class="btn-primary" id="history-from-results-btn" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);box-shadow:none;">View History</button>` : ''}
+        <button class="btn-primary" id="report-from-results-btn" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);box-shadow:none;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          View Report
+        </button>
+        ${authUser ? `<button class="btn-primary" id="history-from-results-btn" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);box-shadow:none;">History</button>` : ''}
       </div>
     </div>
   `;
@@ -463,6 +567,7 @@ function renderResults(data) {
   views.results.innerHTML = html;
   views.results.scrollTop = 0;
   document.getElementById('again-btn').addEventListener('click', resetApp);
+  document.getElementById('report-from-results-btn').addEventListener('click', () => renderReport(data, 'results'));
   document.getElementById('history-from-results-btn')?.addEventListener('click', loadHistory);
 }
 
@@ -596,7 +701,16 @@ async function toggleAssessmentDetail(id) {
         `;
       }
     }
+    inner += `
+      <div style="padding:10px 0 4px">
+        <button class="btn-ghost report-btn-history" style="font-size:13px;display:flex;align-items:center;gap:6px" data-assessment-id="${id}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          View Full Report
+        </button>
+      </div>
+    `;
     body.innerHTML = inner;
+    body.querySelector('.report-btn-history').addEventListener('click', () => renderReport(data, 'history'));
   } catch {
     body.innerHTML = `<p style="padding:16px;color:var(--severe);font-size:13px">Failed to load details.</p>`;
   }
@@ -666,13 +780,556 @@ function getSupportedMimeType() {
     .find(t => MediaRecorder.isTypeSupported(t)) || '';
 }
 
+// ── Admin threshold page ──────────────────────────────────
+
+const THRESHOLD_GROUPS = [
+  {
+    label: 'Knee Valgus', tests: ['squat', 'lunge'], unit: '°', step: 1, precision: 1,
+    note: 'Lower angle = more collapsed knee. Lower threshold = more sensitive.',
+    keys: [
+      { key: 'knee_valgus_moderate', label: 'Mild / Moderate trigger' },
+      { key: 'knee_valgus_severe',   label: 'Severe trigger' },
+    ],
+  },
+  {
+    label: 'Forward Trunk Lean', tests: ['squat', 'lunge', 'overhead'], unit: '°', step: 1, precision: 1,
+    keys: [
+      { key: 'trunk_lean_mild',     label: 'Mild trigger' },
+      { key: 'trunk_lean_moderate', label: 'Moderate trigger' },
+      { key: 'trunk_lean_severe',   label: 'Severe trigger' },
+    ],
+  },
+  {
+    label: 'Lateral Trunk Shift', tests: ['squat', 'lunge', 'overhead'], unit: 'norm', step: 0.005, precision: 3,
+    note: 'Normalised image coordinate offset (0–1 range).',
+    keys: [
+      { key: 'lateral_shift_mild',     label: 'Mild trigger' },
+      { key: 'lateral_shift_moderate', label: 'Moderate trigger' },
+      { key: 'lateral_shift_severe',   label: 'Severe trigger' },
+    ],
+  },
+  {
+    label: 'Lateral Spinal Flexion', tests: ['squat', 'lunge', 'overhead'], unit: '°', step: 0.5, precision: 1,
+    keys: [
+      { key: 'lateral_flexion_mild',     label: 'Mild trigger' },
+      { key: 'lateral_flexion_moderate', label: 'Moderate trigger' },
+      { key: 'lateral_flexion_severe',   label: 'Severe trigger' },
+    ],
+  },
+  {
+    label: 'Spinal Curvature', tests: ['squat', 'lunge', 'overhead'], unit: '°', step: 0.5, precision: 1,
+    note: 'Deviation from 180° (straight spine). Higher = more curvature required to flag.',
+    keys: [
+      { key: 'spine_curve_mild',     label: 'Mild trigger' },
+      { key: 'spine_curve_moderate', label: 'Moderate trigger' },
+      { key: 'spine_curve_severe',   label: 'Severe trigger' },
+    ],
+  },
+  {
+    label: 'Ankle / Heel Rise', tests: ['squat', 'lunge'], unit: '°', step: 1, precision: 1,
+    note: 'Lower angle = more restricted dorsiflexion. Lower threshold = more sensitive.',
+    keys: [
+      { key: 'ankle_df_mild',     label: 'Mild trigger' },
+      { key: 'ankle_df_moderate', label: 'Moderate trigger' },
+    ],
+  },
+  {
+    label: 'Bilateral Symmetry', tests: ['squat', 'lunge', 'overhead'], unit: 'ratio', step: 0.01, precision: 2,
+    note: 'Asymmetry ratio 0–1 where 0 = perfect symmetry.',
+    keys: [
+      { key: 'asymmetry_mild',     label: 'Mild trigger' },
+      { key: 'asymmetry_moderate', label: 'Moderate trigger' },
+      { key: 'asymmetry_severe',   label: 'Severe trigger' },
+    ],
+  },
+  {
+    label: 'Upper Trunk Flexion', tests: ['lateral'], unit: '°', step: 1, precision: 1,
+    note: 'Lateral view only. Ear→shoulder segment angle from vertical.',
+    keys: [
+      { key: 'upper_trunk_mild',     label: 'Mild trigger' },
+      { key: 'upper_trunk_moderate', label: 'Moderate trigger' },
+      { key: 'upper_trunk_severe',   label: 'Severe trigger' },
+    ],
+  },
+  {
+    label: 'Head Forward Posture', tests: ['lateral'], unit: 'norm', step: 0.005, precision: 3,
+    note: 'Lateral view only. Normalised horizontal ear-to-shoulder offset.',
+    keys: [
+      { key: 'head_forward_mild',     label: 'Mild trigger' },
+      { key: 'head_forward_moderate', label: 'Moderate trigger' },
+      { key: 'head_forward_severe',   label: 'Severe trigger' },
+    ],
+  },
+  {
+    label: 'Squat — Trunk Lean', tests: ['squat'], unit: '°', step: 1, precision: 1,
+    note: 'Squat-specific thresholds only. Optimal squat trunk lean is 20–40°, so triggering below 45° would flag normal technique.',
+    keys: [
+      { key: 'squat_trunk_lean_mild',     label: 'Mild trigger' },
+      { key: 'squat_trunk_lean_moderate', label: 'Moderate trigger' },
+      { key: 'squat_trunk_lean_severe',   label: 'Severe trigger' },
+    ],
+  },
+  {
+    label: 'Dorsiflexion — Tibial Angle', tests: ['squat', 'lunge', 'lateral'], unit: '°', step: 0.5, precision: 1,
+    note: 'Lateral view only. Angle of tibia from vertical at squat depth. Optimal: 30–40°. Lower threshold = more restricted ankle.',
+    keys: [
+      { key: 'tibial_angle_restricted_mild',   label: 'Mild restriction trigger (lower is worse)' },
+      { key: 'tibial_angle_restricted_severe', label: 'Severe restriction trigger (lower is worse)' },
+    ],
+  },
+  {
+    label: 'Pelvic Tilt', tests: ['squat', 'lunge', 'overhead'], unit: '°', step: 0.5, precision: 1,
+    note: 'Anterior view. Angle of hip line from horizontal. Even small tilts can indicate hip weakness.',
+    keys: [
+      { key: 'pelvic_tilt_mild',     label: 'Mild trigger' },
+      { key: 'pelvic_tilt_moderate', label: 'Moderate trigger' },
+      { key: 'pelvic_tilt_severe',   label: 'Severe trigger' },
+    ],
+  },
+];
+
+async function loadAdminPage() {
+  showView('admin');
+  views.admin.innerHTML = `<div class="processing-content"><div class="spinner-ring"></div></div>`;
+  try {
+    const res = await authFetch('/admin/thresholds');
+    if (res.status === 403) { views.admin.innerHTML = `<div class="error-content"><div class="error-icon">⚠</div><p>Admin access required.</p></div>`; return; }
+    if (!res.ok) throw new Error('Failed to load thresholds.');
+    renderAdminPage(await res.json());
+  } catch (err) {
+    views.admin.innerHTML = `<div class="error-content"><div class="error-icon">⚠</div><p>${err.message}</p></div>`;
+  }
+}
+
+function renderAdminPage(data) {
+  const thresholds = data.thresholds;
+
+  let html = `
+    <div class="admin-header">
+      <h1>Threshold Settings</h1>
+      <p>Adjust when compensation patterns are flagged. Changes take effect on the next analysis.</p>
+    </div>
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-filter="all">All</button>
+      <button class="filter-tab" data-filter="squat">🏋️ Squat</button>
+      <button class="filter-tab" data-filter="lunge">🦵 Lunge</button>
+      <button class="filter-tab" data-filter="overhead">🙌 Overhead</button>
+      <button class="filter-tab" data-filter="lateral">↔ Lateral View</button>
+    </div>
+  `;
+
+  for (const group of THRESHOLD_GROUPS) {
+    const testsAttr = group.tests.join(' ');
+    const testBadges = group.tests.map(t => `<span class="test-badge">${t}</span>`).join('');
+
+    let rows = '';
+    for (const { key, label } of group.keys) {
+      const t = thresholds[key];
+      if (!t) continue;
+      const val  = t.value;
+      const def  = t.default;
+      const mod  = t.is_overridden;
+      rows += `
+        <div class="threshold-row${mod ? ' dirty' : ''}" data-key="${key}" data-default="${def}">
+          <div class="threshold-label-wrap">
+            <span class="threshold-label">${label}</span>
+            <span class="threshold-modified${mod ? '' : ' hidden'}">Modified</span>
+          </div>
+          <div class="threshold-controls">
+            <div class="threshold-input-wrap">
+              <input
+                type="number"
+                class="threshold-input"
+                value="${val.toFixed(group.precision)}"
+                step="${group.step}"
+                min="0"
+                data-original="${val}"
+                title="${t.description}"
+              />
+              <span class="threshold-unit">${group.unit}</span>
+            </div>
+            <span class="threshold-default">Default: ${def}</span>
+            <button class="threshold-save-btn" disabled>Save</button>
+            <button class="threshold-reset-btn${mod ? '' : ' hidden'}" title="Reset to default">↺</button>
+          </div>
+        </div>
+      `;
+    }
+
+    html += `
+      <div class="threshold-group" data-tests="${testsAttr}">
+        <div class="card">
+          <div class="threshold-group-header">
+            <h2 class="card-title" style="margin-bottom:0">${group.label}</h2>
+            <div class="test-badges">${testBadges}</div>
+          </div>
+          ${group.note ? `<p style="font-size:12px;color:var(--text-3);margin-bottom:10px;line-height:1.4">${group.note}</p>` : ''}
+          ${rows}
+        </div>
+      </div>
+    `;
+  }
+
+  html += `<div style="padding-bottom:40px"></div>`;
+  views.admin.innerHTML = html;
+}
+
+views.admin.addEventListener('input', e => {
+  if (!e.target.matches('.threshold-input')) return;
+  const row     = e.target.closest('.threshold-row');
+  const saveBtn = row.querySelector('.threshold-save-btn');
+  const changed = parseFloat(e.target.value) !== parseFloat(e.target.dataset.original);
+  saveBtn.disabled = !changed || isNaN(parseFloat(e.target.value));
+});
+
+views.admin.addEventListener('click', async e => {
+  if (e.target.matches('.filter-tab')) {
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.toggle('active', t === e.target));
+    const filter = e.target.dataset.filter;
+    document.querySelectorAll('.threshold-group').forEach(g => {
+      g.style.display = (filter === 'all' || g.dataset.tests.split(' ').includes(filter)) ? '' : 'none';
+    });
+    return;
+  }
+  if (e.target.matches('.threshold-save-btn')) { await saveThreshold(e.target.closest('.threshold-row')); return; }
+  if (e.target.matches('.threshold-reset-btn')) { await resetThreshold(e.target.closest('.threshold-row')); }
+});
+
+async function saveThreshold(row) {
+  const key     = row.dataset.key;
+  const input   = row.querySelector('.threshold-input');
+  const saveBtn = row.querySelector('.threshold-save-btn');
+  const value   = parseFloat(input.value);
+  if (isNaN(value)) return;
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = '…';
+  try {
+    const res = await authFetch('/admin/thresholds', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates: { [key]: value } }),
+    });
+    if (!res.ok) throw new Error();
+    input.dataset.original = value;
+    row.querySelector('.threshold-modified').classList.remove('hidden');
+    row.querySelector('.threshold-reset-btn').classList.remove('hidden');
+    showToast('Saved');
+  } catch {
+    showToast('Failed to save', 'error');
+  } finally {
+    saveBtn.textContent = 'Save';
+    saveBtn.disabled = parseFloat(input.value) === parseFloat(input.dataset.original);
+  }
+}
+
+async function resetThreshold(row) {
+  const key      = row.dataset.key;
+  const input    = row.querySelector('.threshold-input');
+  const resetBtn = row.querySelector('.threshold-reset-btn');
+  const defVal   = parseFloat(row.dataset.default);
+
+  resetBtn.disabled = true;
+  try {
+    const res = await authFetch(`/admin/thresholds/${key}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    input.value = defVal;
+    input.dataset.original = defVal;
+    row.querySelector('.threshold-modified').classList.add('hidden');
+    resetBtn.classList.add('hidden');
+    row.querySelector('.threshold-save-btn').disabled = true;
+    showToast('Reset to default');
+  } catch {
+    showToast('Failed to reset', 'error');
+  } finally {
+    resetBtn.disabled = false;
+  }
+}
+
+function showToast(msg, type = 'success') {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = `toast${type === 'error' ? ' toast-error' : ''}`;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('visible')));
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+}
+
+// ── Report ───────────────────────────────────────────────
+
+const RECOMMENDATIONS = {
+  'Knee Valgus': {
+    what: 'Your knee is collapsing inward (toward the midline) during the movement.',
+    means: 'This places excess stress on the knee ligaments and cartilage. It often indicates weakness in the glutes or hip abductors, and/or tightness in the hip flexors.',
+    tips: [
+      'Strengthen glutes: clamshells, side-lying hip abduction, glute bridges, hip thrusts',
+      'Add lateral band walks and monster walks to build hip stability',
+      'Practice single-leg squats in front of a mirror to improve knee tracking awareness',
+      'Check ankle mobility — limited dorsiflexion can force knees inward',
+    ],
+  },
+  'Forward Trunk Lean': {
+    what: 'Your upper body is leaning forward more than expected during the movement.',
+    means: 'Excessive forward lean can increase load on the lower back and may indicate tight hip flexors, limited ankle mobility, or weakness in the core and posterior chain.',
+    tips: [
+      'Strengthen your core: planks, dead bugs, Pallof press',
+      'Improve ankle dorsiflexion with calf stretches and ankle mobility drills',
+      'Stretch hip flexors with couch stretches and lunging hip flexor stretches',
+      'Practise goblet squats to reinforce an upright torso',
+    ],
+  },
+  'Lateral Trunk Shift': {
+    what: 'Your shoulders are shifting to one side rather than staying centred over your hips.',
+    means: 'A lateral shift can signal unilateral hip weakness, leg-length discrepancy, or pain-avoidance behaviour. It concentrates load on one side of the spine.',
+    tips: [
+      'Strengthen the hip abductors on the weak side: side-lying raises, cable hip abduction',
+      'Check for and address any leg-length difference with a physiotherapist',
+      'Single-leg balance and single-leg deadlift progressions help correct asymmetry',
+    ],
+  },
+  'Heel Rise': {
+    what: 'Your heel is lifting off the floor, or your ankle is not bending enough during the movement.',
+    means: 'Limited ankle dorsiflexion is often the culprit. This forces compensations upstream — knees cave in, trunk leans forward, or the lower back rounds.',
+    tips: [
+      'Daily calf and Achilles stretches (both straight-knee and bent-knee)',
+      'Ankle circles, banded ankle mobilisation, and wall ankle stretches',
+      'Elevate your heels temporarily while you build mobility',
+      'Consider manual therapy if mobility does not improve after 4–6 weeks',
+    ],
+  },
+  'Dorsiflexion': {
+    what: 'Your ankle is not bending enough during the movement.',
+    means: 'Restricted ankle dorsiflexion limits how far your knee can travel over your toes. This forces the heel up or the trunk to lean forward to compensate.',
+    tips: [
+      'Perform daily ankle mobility drills: wall ankle stretches, banded joint mobilisation',
+      'Foam roll and stretch the calf and Achilles complex',
+      'Work on soft tissue release of the peroneals and anterior shin muscles',
+    ],
+  },
+  'Pelvic Tilt': {
+    what: 'One side of your pelvis is dropping lower than the other during the movement.',
+    means: 'This is often a sign of hip abductor weakness (Trendelenburg sign) on the standing or loaded leg. It can also indicate a leg-length difference.',
+    tips: [
+      'Strengthen hip abductors: clamshells, side-lying raises, hip thrusts with band',
+      'Single-leg balance training and single-leg deadlifts to build stability',
+      'Consult a physiotherapist if the pelvic drop is consistent and pronounced',
+    ],
+  },
+  'Lateral Spinal Flexion': {
+    what: 'Your spine is bending sideways during the movement.',
+    means: 'Side-bending of the spine during loading can indicate lateral core weakness or a pain avoidance pattern. It increases asymmetric compressive forces on the discs.',
+    tips: [
+      'Strengthen the lateral core: side planks, Copenhagen planks, suitcase carries',
+      'Address any hip tightness that may cause the trunk to deviate',
+      'Unilateral exercises (single-arm carries, split squats) help expose and correct asymmetry',
+    ],
+  },
+  'Spinal Segmental Curvature': {
+    what: 'There is an increased curve (bend) detected between your upper and lower back segments.',
+    means: 'This may reflect thoracic kyphosis (rounding in the upper back) or lumbar lordosis. Sustained postures like desk work can reinforce these patterns over time.',
+    tips: [
+      'Thoracic extension mobility work: foam rolling the thoracic spine, cat-cow stretches',
+      'Strengthen the lower and middle trapezius: face pulls, rows, Y-T-W exercises',
+      'Work on hip flexor length to reduce anterior pelvic tilt and lumbar compensation',
+      'Consider a posture assessment with a physiotherapist or chiropractor',
+    ],
+  },
+  'Head Forward Posture': {
+    what: 'Your head is positioned noticeably in front of your shoulders.',
+    means: 'Forward head posture increases the effective weight the neck must support. It is commonly associated with tight upper traps and pec minor, and weak deep neck flexors.',
+    tips: [
+      'Chin tucks: 3 × 10–15 reps daily to strengthen deep neck flexors',
+      'Stretch the upper traps, scalenes, and pec minor',
+      'Strengthen mid/lower traps and rhomboids: face pulls, band pull-aparts, rows',
+      'Review your workstation setup — screen height and seating posture matter',
+    ],
+  },
+  'Upper Trunk Flexion': {
+    what: 'Your upper back (thoracic spine) is rounded or flexed forward more than expected.',
+    means: 'Thoracic kyphosis or poor upper-back mobility can restrict overhead movement and increase load on the cervical spine and shoulders.',
+    tips: [
+      'Thoracic spine mobilisation: foam roller extensions, thoracic rotation stretches',
+      'Strengthen upper-back postural muscles: face pulls, band pull-aparts',
+      'Overhead mobility work: lat stretches, doorway shoulder stretches',
+    ],
+  },
+  'Asymmetry': {
+    what: 'There is a meaningful difference between the left and right side of the movement.',
+    means: 'Bilateral asymmetry can reflect an old injury, muscle imbalance, or habitual movement pattern. Left–right imbalances increase injury risk over time, especially under load.',
+    tips: [
+      'Include unilateral exercises in your training: single-leg squats, split squats, single-arm rows',
+      'Start unilateral sets with your weaker side and match reps on the stronger side',
+      'Video yourself from the front to monitor symmetry over time',
+      'Consider a professional movement screen with a physiotherapist or strength coach',
+    ],
+  },
+};
+
+function getRecommendationInfo(findingName) {
+  for (const [keyword, info] of Object.entries(RECOMMENDATIONS)) {
+    if (findingName.includes(keyword)) return info;
+  }
+  return null;
+}
+
+function generateSummary(data) {
+  const sev = data.worst_severity;
+  const count = data.findings.length;
+  const screenName = data.screen_name || 'movement screen';
+
+  if (sev === 'none') {
+    return `Your ${screenName} showed no significant compensation patterns. Your movement quality looks great — keep up the good work and continue monitoring over time.`;
+  }
+
+  const sevText = { mild: 'minor', moderate: 'moderate', severe: 'notable' }[sev] || sev;
+  const findingNames = data.findings.map(f => f.name.replace(/ \(.*\)$/, '')).filter((v, i, a) => a.indexOf(v) === i);
+  const listText = findingNames.length <= 2
+    ? findingNames.join(' and ')
+    : findingNames.slice(0, 2).join(', ') + ` and ${findingNames.length - 2} other area${findingNames.length - 2 > 1 ? 's' : ''}`;
+
+  return `Your ${screenName} identified ${count} compensation pattern${count !== 1 ? 's' : ''}, with ${sevText} concerns in: ${listText}. These findings are not a diagnosis — they highlight areas to focus on in your training and mobility work. Use the recommendations below as a starting point, and consider working with a qualified physiotherapist or movement coach for a personalised programme.`;
+}
+
+function renderReport(data, source) {
+  const sev   = data.worst_severity;
+  const color = SEV_COLOR[sev];
+  const icon  = { none: '✓', mild: '~', moderate: '!', severe: '▲' }[sev] ?? '?';
+  const grade = { none: 'Excellent', mild: 'Good — minor notes', moderate: 'Fair — attention needed', severe: 'Needs improvement' }[sev] ?? sev;
+  const gradeDesc = {
+    none: 'No significant compensations detected.',
+    mild: 'Small compensations present — address in your routine.',
+    moderate: 'Moderate compensations found — prioritise the recommendations below.',
+    severe: 'Significant compensations found — consider professional guidance.',
+  }[sev] ?? '';
+
+  const dateStr = data.recorded_at
+    ? new Date(data.recorded_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    : new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  let html = `<div class="report-wrap">`;
+
+  // Masthead
+  html += `
+    <div class="report-masthead">
+      <div class="report-logo-row">
+        <svg width="22" height="22" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="6" r="3.5" fill="currentColor"/><path d="M14 10v6M10 13l4 3 4-3M10 22l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>MovementScreen</span>
+      </div>
+      <h2>Movement Assessment Report</h2>
+      <p>${data.screen_name} · ${ANGLE_LABEL[data.camera_angle] ?? data.camera_angle} view · ${dateStr}</p>
+    </div>
+  `;
+
+  // Grade
+  html += `
+    <div class="card" style="margin-bottom:16px">
+      <div class="report-grade-row">
+        <div class="report-grade-circle" style="color:${color};border-color:${color}">${icon}</div>
+        <div class="report-grade-text">
+          <h3>${grade}</h3>
+          <p>${gradeDesc}</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Summary
+  html += `
+    <p class="report-section-title">Summary</p>
+    <div class="report-summary-card">${generateSummary(data)}</div>
+  `;
+
+  // Findings
+  html += `<p class="report-section-title">Findings &amp; Recommendations</p>`;
+
+  if (data.findings.length === 0) {
+    html += `
+      <div class="report-no-findings">
+        <span class="icon">✓</span>
+        <p>No compensation patterns were detected in this assessment.</p>
+      </div>
+    `;
+  } else {
+    for (const f of data.findings) {
+      const c    = SEV_COLOR[f.severity];
+      const info = getRecommendationInfo(f.name);
+      html += `
+        <div class="report-finding" style="--border-color:${c}">
+          <div class="report-finding-header">
+            <span class="severity-badge" style="background:${c}">${SEV_LABEL[f.severity]}</span>
+            <span class="report-finding-name">${f.name}</span>
+          </div>
+          ${info ? `<p class="report-what">${info.what}</p>` : `<p class="report-what">${f.description}</p>`}
+          ${f.metric_value != null ? `<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">${f.metric_label}: ${typeof f.metric_value === 'number' ? f.metric_value.toFixed(1) : f.metric_value}</p>` : ''}
+          ${info ? `
+            <p class="report-tips-title">What to do</p>
+            <ul class="report-tips">${info.tips.map(t => `<li>${t}</li>`).join('')}</ul>
+          ` : ''}
+        </div>
+      `;
+    }
+  }
+
+  // Stats table
+  if (data.stats && data.stats.length > 0) {
+    html += `
+      <p class="report-section-title">Measurement Data</p>
+      <table class="report-stats-table">
+        <thead><tr><th>Measurement</th><th>Min</th><th>Mean</th><th>Max</th></tr></thead>
+        <tbody>
+          ${data.stats.map(s => `<tr><td>${s.name}</td><td>${s.min}°</td><td>${s.mean}°</td><td>${s.max}°</td></tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // Disclaimer
+  html += `
+    <p class="report-disclaimer">
+      <strong>Disclaimer:</strong> This report is generated automatically from video-based pose estimation and is intended for informational and training purposes only. It is not a medical diagnosis. Measurement accuracy depends on camera angle, lighting, and body visibility. Consult a qualified physiotherapist, sports medicine physician, or movement specialist before making changes to your training or rehabilitation programme.
+    </p>
+  `;
+
+  // Actions
+  html += `
+    <div class="report-actions">
+      <button class="btn-primary" id="report-print-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print / Save PDF
+      </button>
+      <button class="btn-ghost" id="report-back-btn">← Back</button>
+    </div>
+  </div>`;
+
+  views.report.innerHTML = html;
+  views.report.scrollTop = 0;
+  document.getElementById('report-print-btn').addEventListener('click', () => window.print());
+  document.getElementById('report-back-btn').addEventListener('click', source === 'history' ? loadHistory : () => showView('results'));
+  showView('report');
+}
+
 // ── Boot ─────────────────────────────────────────────────
 loadAuth();
 updateHeader();
 if (authUser && authToken) {
-  // Validate token is still good
+  // Validate token and refresh authUser (picks up is_admin changes)
   fetch('/auth/me', { headers: { Authorization: `Bearer ${authToken}` } })
-    .then(r => r.ok ? showView('setup') : (clearAuth(), updateHeader(), showView('auth')))
+    .then(async r => {
+      if (r.ok) {
+        const fresh = await r.json();
+        authUser = { ...authUser, ...fresh };
+        localStorage.setItem('ms_user', JSON.stringify(authUser));
+        updateHeader();
+        showView('setup');
+      } else {
+        clearAuth(); updateHeader(); showView('auth');
+      }
+    })
     .catch(() => showView('setup'));
 } else {
   showView('auth');

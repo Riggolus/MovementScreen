@@ -21,6 +21,10 @@ class OverheadReachScreen(BaseScreen):
     def name(self) -> str:
         return "Overhead Reach"
 
+    @property
+    def screen_type(self) -> str:
+        return "overhead"
+
     def accept_frame(self, frame: PoseFrame) -> bool:
         g = frame.get
         # Accept only frames where at least one wrist is above the nose

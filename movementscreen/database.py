@@ -49,7 +49,7 @@ async def get_user_by_email(pool: asyncpg.Pool, email: str) -> Optional[dict]:
 
 async def get_user_by_id(pool: asyncpg.Pool, user_id: str) -> Optional[dict]:
     row = await pool.fetchrow(
-        "SELECT id, email, name, created_at FROM users WHERE id = $1",
+        "SELECT id, email, name, is_admin, created_at FROM users WHERE id = $1",
         uuid.UUID(user_id),
     )
     return dict(row) if row else None
@@ -165,6 +165,36 @@ async def get_assessment_detail(
     ]
     return detail
 
+
+# ── Threshold config ─────────────────────────────────────
+
+async def get_all_thresholds(pool: asyncpg.Pool) -> list[dict]:
+    rows = await pool.fetch(
+        "SELECT key, value, description, updated_at FROM threshold_config ORDER BY key"
+    )
+    return [dict(r) for r in rows]
+
+
+async def upsert_threshold(pool: asyncpg.Pool, key: str, value: float, description: Optional[str] = None) -> None:
+    await pool.execute(
+        """
+        INSERT INTO threshold_config (key, value, description, updated_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (key) DO UPDATE
+            SET value       = EXCLUDED.value,
+                description = COALESCE(EXCLUDED.description, threshold_config.description),
+                updated_at  = NOW()
+        """,
+        key, value, description,
+    )
+
+
+async def delete_threshold(pool: asyncpg.Pool, key: str) -> None:
+    """Remove a DB override, causing the default to be used again."""
+    await pool.execute("DELETE FROM threshold_config WHERE key = $1", key)
+
+
+# ── Progress ─────────────────────────────────────────────
 
 async def get_progress(pool: asyncpg.Pool, user_id: str) -> dict:
     rows = await pool.fetch(

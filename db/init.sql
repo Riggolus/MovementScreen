@@ -4,11 +4,12 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE users (
-    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     email         VARCHAR(255) UNIQUE NOT NULL,
     name          VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    is_admin      BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE assessments (
@@ -42,7 +43,14 @@ CREATE TABLE angle_stats (
     mean_value    NUMERIC(8,2)
 );
 
-CREATE INDEX idx_assessments_user_id    ON assessments(user_id);
-CREATE INDEX idx_assessments_recorded_at ON assessments(recorded_at);
-CREATE INDEX idx_findings_assessment_id  ON findings(assessment_id);
+CREATE TABLE threshold_config (
+    key         VARCHAR(100) PRIMARY KEY,
+    value       DOUBLE PRECISION NOT NULL,
+    description TEXT,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_assessments_user_id      ON assessments(user_id);
+CREATE INDEX idx_assessments_recorded_at  ON assessments(recorded_at);
+CREATE INDEX idx_findings_assessment_id   ON findings(assessment_id);
 CREATE INDEX idx_angle_stats_assessment_id ON angle_stats(assessment_id);

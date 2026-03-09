@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from movementscreen.analysis.aggregator import TrialAggregator, TrialResult
 from movementscreen.analysis.joint_angles import JointAngles, compute_joint_angles
 from movementscreen.pose.landmarks import PoseFrame
+from movementscreen.thresholds import ThresholdConfig
 
 
 class BaseScreen(ABC):
@@ -19,7 +20,17 @@ class BaseScreen(ABC):
     def name(self) -> str:
         """Human-readable screen name."""
 
-    def run(self, frames: list[PoseFrame]) -> TrialResult:
+    @property
+    def screen_type(self) -> str:
+        """Machine-readable screen identifier used for screen-specific threshold logic."""
+        return ""
+
+    def run(
+        self,
+        frames: list[PoseFrame],
+        camera_angle: str = "anterior",
+        thresholds: ThresholdConfig | None = None,
+    ) -> TrialResult:
         """Process all frames and return the aggregated trial result."""
         aggregator = TrialAggregator(screen_name=self.name)
         for frame in frames:
@@ -27,7 +38,7 @@ class BaseScreen(ABC):
                 angles = compute_joint_angles(frame)
                 angles = self.augment_angles(angles, frame)
                 aggregator.add_frame(angles)
-        return aggregator.finalize()
+        return aggregator.finalize(camera_angle=camera_angle, thresholds=thresholds, screen_type=self.screen_type)
 
     def accept_frame(self, frame: PoseFrame) -> bool:
         """Return True if this frame should be included in analysis.

@@ -5,7 +5,7 @@ from movementscreen.pose.landmarks import LM, PoseFrame
 from movementscreen.screens.base_screen import BaseScreen
 from movementscreen.utils.geometry import angle_between
 
-LUNGE_DEPTH_THRESHOLD_DEGREES = 120.0  # lead knee angle < 120° → near bottom
+LUNGE_DEPTH_THRESHOLD_DEGREES = 105.0  # lead knee angle < 105° → near bottom (roughly 90° lunge position)
 
 
 class LungeScreen(BaseScreen):
@@ -27,6 +27,10 @@ class LungeScreen(BaseScreen):
     @property
     def name(self) -> str:
         return f"Forward Lunge ({self._lead_side.capitalize()} Lead)"
+
+    @property
+    def screen_type(self) -> str:
+        return "lunge"
 
     def accept_frame(self, frame: PoseFrame) -> bool:
         if not self._at_depth_only:
