@@ -40,9 +40,12 @@ import asyncpg
 # ---------------------------------------------------------------------------
 
 DESCRIPTIONS: dict[str, str] = {
+    "knee_valgus_mild": (
+        "Knee frontal angle (°) at or below which mild valgus is flagged "
+        "(e.g. 178° = 2° inward from straight)"
+    ),
     "knee_valgus_moderate": (
-        "Knee frontal angle (°) at or below which mild/moderate valgus is flagged "
-        "(lower value = more collapsed knee required to trigger)"
+        "Knee frontal angle (°) at or below which moderate valgus is flagged"
     ),
     "knee_valgus_severe": (
         "Knee frontal angle (°) at or below which severe valgus is flagged"
@@ -142,9 +145,10 @@ class ThresholdConfig:
     """All configurable compensation thresholds with their hardcoded defaults."""
 
     # Knee valgus (frontal angle; lower = more collapsed knee)
-    # 180° = perfectly straight; 175° ≈ 5° valgus (clinical mild threshold)
-    knee_valgus_moderate: float = 175.0
-    knee_valgus_severe: float = 165.0
+    # 180° = perfectly straight alignment in the frontal plane
+    knee_valgus_mild: float = 177.0      # ~3° inward — early warning
+    knee_valgus_moderate: float = 173.0  # ~7° inward — clinically significant
+    knee_valgus_severe: float = 165.0    # ~15° inward — major collapse
 
     # Forward trunk lean
     trunk_lean_mild: float = 20.0

@@ -549,6 +549,20 @@ function renderResults(data) {
     html += `</div>`;
   }
 
+  if (authUser?.is_admin) {
+    html += `
+      <h2 class="section-title">Calibrate Thresholds</h2>
+      <div class="card" style="margin-bottom:20px">
+        <p class="calib-intro">
+          This recording captured your movement data as the <strong>optimal standard</strong>.
+          The table below suggests threshold values relative to your actual joint angles.
+          Adjust sensitivity and edit any value before applying.
+        </p>
+        <div id="calibration-panel"></div>
+      </div>
+    `;
+  }
+
   html += `
       <div class="results-actions">
         <button class="btn-primary" id="again-btn">
@@ -569,6 +583,7 @@ function renderResults(data) {
   document.getElementById('again-btn').addEventListener('click', resetApp);
   document.getElementById('report-from-results-btn').addEventListener('click', () => renderReport(data, 'results'));
   document.getElementById('history-from-results-btn')?.addEventListener('click', loadHistory);
+  if (authUser?.is_admin) renderCalibrationPanel(data);
 }
 
 // ── History / Progress ────────────────────────────────────
@@ -784,10 +799,11 @@ function getSupportedMimeType() {
 
 const THRESHOLD_GROUPS = [
   {
-    label: 'Knee Valgus', tests: ['squat', 'lunge'], unit: '°', step: 1, precision: 1,
-    note: 'Lower angle = more collapsed knee. Lower threshold = more sensitive.',
+    label: 'Knee Valgus', tests: ['squat', 'lunge'], unit: '°', step: 0.5, precision: 1,
+    note: '180° = perfect frontal alignment. Lower angle = more inward knee collapse. Mild ≈ 3° inward, Moderate ≈ 7°, Severe ≈ 15°.',
     keys: [
-      { key: 'knee_valgus_moderate', label: 'Mild / Moderate trigger' },
+      { key: 'knee_valgus_mild',     label: 'Mild trigger' },
+      { key: 'knee_valgus_moderate', label: 'Moderate trigger' },
       { key: 'knee_valgus_severe',   label: 'Severe trigger' },
     ],
   },
@@ -1058,6 +1074,191 @@ function showToast(msg, type = 'success') {
     toast.classList.remove('visible');
     setTimeout(() => toast.remove(), 300);
   }, 2500);
+}
+
+// ── Threshold Calibration ────────────────────────────────
+
+const SENS_MULT = { strict: 0.6, normal: 1.0, lenient: 1.6 };
+const SENS_DESC = {
+  strict:  'Strict: thresholds sit 40% closer to your optimal — flags minor deviations.',
+  normal:  'Normal: standard tolerance bands (10–30° beyond your captured optimum).',
+  lenient: 'Lenient: 60% wider tolerance — only flags clear compensations.',
+};
+
+// Each entry: (meanVal, screenType, sensitivityMultiplier) → [{key, value, label}]
+const CALIBRATION_MAP = {
+  trunk_lean_degrees: (mean, screenType, m) => {
+    const p = screenType === 'squat' ? 'squat_trunk_lean' : 'trunk_lean';
+    return [
+      { key: `${p}_mild`,     value: mean + 10 * m, label: 'Mild lean trigger' },
+      { key: `${p}_moderate`, value: mean + 20 * m, label: 'Moderate lean trigger' },
+      { key: `${p}_severe`,   value: mean + 30 * m, label: 'Severe lean trigger' },
+    ];
+  },
+  tibial_angle_left: (mean, _, m) => [
+    { key: 'tibial_angle_restricted_mild',   value: mean - 5  * m, label: 'Tibial — mild restriction' },
+    { key: 'tibial_angle_restricted_severe', value: mean - 15 * m, label: 'Tibial — severe restriction' },
+  ],
+  tibial_angle_right: (mean, _, m) => [
+    { key: 'tibial_angle_restricted_mild',   value: mean - 5  * m, label: 'Tibial — mild restriction' },
+    { key: 'tibial_angle_restricted_severe', value: mean - 15 * m, label: 'Tibial — severe restriction' },
+  ],
+  left_knee_frontal_angle: (mean, _, m) => [
+    { key: 'knee_valgus_mild',     value: mean - 3  * m, label: 'Knee valgus mild trigger' },
+    { key: 'knee_valgus_moderate', value: mean - 7  * m, label: 'Knee valgus moderate trigger' },
+    { key: 'knee_valgus_severe',   value: mean - 15 * m, label: 'Knee valgus severe trigger' },
+  ],
+  right_knee_frontal_angle: (mean, _, m) => [
+    { key: 'knee_valgus_mild',     value: mean - 3  * m, label: 'Knee valgus mild trigger' },
+    { key: 'knee_valgus_moderate', value: mean - 7  * m, label: 'Knee valgus moderate trigger' },
+    { key: 'knee_valgus_severe',   value: mean - 15 * m, label: 'Knee valgus severe trigger' },
+  ],
+  pelvic_tilt_degrees: (mean, _, m) => {
+    const ref = Math.abs(mean);
+    return [
+      { key: 'pelvic_tilt_mild',     value: ref + 2 * m, label: 'Pelvic tilt — mild trigger' },
+      { key: 'pelvic_tilt_moderate', value: ref + 5 * m, label: 'Pelvic tilt — moderate trigger' },
+      { key: 'pelvic_tilt_severe',   value: ref + 9 * m, label: 'Pelvic tilt — severe trigger' },
+    ];
+  },
+  lateral_flexion_degrees: (mean, _, m) => {
+    const ref = Math.abs(mean);
+    return [
+      { key: 'lateral_flexion_mild',     value: ref + 5  * m, label: 'Lateral flexion — mild' },
+      { key: 'lateral_flexion_moderate', value: ref + 10 * m, label: 'Lateral flexion — moderate' },
+      { key: 'lateral_flexion_severe',   value: ref + 15 * m, label: 'Lateral flexion — severe' },
+    ];
+  },
+  upper_trunk_angle: (mean, _, m) => [
+    { key: 'upper_trunk_mild',     value: mean + 10 * m, label: 'Upper trunk — mild' },
+    { key: 'upper_trunk_moderate', value: mean + 20 * m, label: 'Upper trunk — moderate' },
+    { key: 'upper_trunk_severe',   value: mean + 30 * m, label: 'Upper trunk — severe' },
+  ],
+  lateral_trunk_shift: (mean, _, m) => {
+    const ref = Math.abs(mean);
+    return [
+      { key: 'lateral_shift_mild',     value: ref + 0.02 * m, label: 'Lateral shift — mild' },
+      { key: 'lateral_shift_moderate', value: ref + 0.04 * m, label: 'Lateral shift — moderate' },
+      { key: 'lateral_shift_severe',   value: ref + 0.07 * m, label: 'Lateral shift — severe' },
+    ];
+  },
+};
+
+function computeCalibrationSuggestions(stats, screenType, sensitivity) {
+  const m = SENS_MULT[sensitivity] || 1.0;
+  const keyAccum = {}; // key → {values[], label}
+
+  for (const stat of stats) {
+    const fn = CALIBRATION_MAP[stat.field];
+    if (!fn || stat.mean == null) continue;
+    for (const { key, value, label } of fn(stat.mean, screenType, m)) {
+      if (!keyAccum[key]) keyAccum[key] = { values: [], label };
+      keyAccum[key].values.push(value);
+    }
+  }
+
+  return Object.entries(keyAccum).map(([key, { values, label }]) => ({
+    key,
+    label,
+    // Average if multiple stats contribute to the same key (e.g. left+right tibial)
+    value: values.reduce((a, b) => a + b, 0) / values.length,
+  }));
+}
+
+function renderCalibrationPanel(data) {
+  const container = document.getElementById('calibration-panel');
+  if (!container) return;
+
+  let sensitivity = 'normal';
+  let currentThresholds = {};
+
+  // Pre-load current values so we can show them alongside suggestions
+  authFetch('/admin/thresholds')
+    .then(r => r.json())
+    .then(({ thresholds }) => { currentThresholds = thresholds; drawPanel(); })
+    .catch(() => drawPanel());
+
+  function fmt(v) {
+    if (v == null) return '—';
+    return Math.abs(v) < 1 ? v.toFixed(3) : v.toFixed(1);
+  }
+
+  function drawPanel() {
+    const suggestions = computeCalibrationSuggestions(data.stats, data.screen_type, sensitivity);
+
+    if (suggestions.length === 0) {
+      container.innerHTML = `<p style="color:var(--text-3);font-size:13px">No calibratable metrics captured. Try a lateral view for sagittal calibration, or anterior for frontal-plane calibration.</p>`;
+      return;
+    }
+
+    let html = `
+      <div class="sens-row">
+        <span class="sens-label">Sensitivity</span>
+        <div class="sens-btns">
+          ${['strict', 'normal', 'lenient'].map(s =>
+            `<button class="sens-btn${sensitivity === s ? ' active' : ''}" data-sens="${s}">${s[0].toUpperCase() + s.slice(1)}</button>`
+          ).join('')}
+        </div>
+      </div>
+      <p class="sens-desc-text">${SENS_DESC[sensitivity]}</p>
+      <table class="calibration-table">
+        <thead><tr><th>Threshold</th><th>Current</th><th>Suggested</th></tr></thead>
+        <tbody>
+          ${suggestions.map(s => `
+            <tr>
+              <td class="calib-label">
+                ${s.label}
+                <span class="calib-key">${s.key.replace(/_/g, ' ')}</span>
+              </td>
+              <td class="calib-current">${currentThresholds[s.key] ? fmt(currentThresholds[s.key].value) : '—'}</td>
+              <td><input class="calib-input" type="number" step="0.1" data-key="${s.key}" value="${fmt(s.value)}"/></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <button class="btn-primary" id="apply-calib-btn">
+        Apply ${suggestions.length} Threshold Update${suggestions.length !== 1 ? 's' : ''}
+      </button>
+    `;
+    container.innerHTML = html;
+
+    container.querySelectorAll('.sens-btn').forEach(btn =>
+      btn.addEventListener('click', () => { sensitivity = btn.dataset.sens; drawPanel(); })
+    );
+
+    document.getElementById('apply-calib-btn').addEventListener('click', async () => {
+      const updates = {};
+      container.querySelectorAll('.calib-input').forEach(inp => {
+        const v = parseFloat(inp.value);
+        if (!isNaN(v)) updates[inp.dataset.key] = v;
+      });
+      const btn = document.getElementById('apply-calib-btn');
+      btn.disabled = true; btn.textContent = 'Applying…';
+      try {
+        const res = await authFetch('/admin/thresholds', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updates }),
+        });
+        if (!res.ok) throw new Error();
+        showToast('Thresholds calibrated from recording');
+        btn.textContent = `✓ Applied`;
+        // Refresh current column
+        currentThresholds = {};
+        authFetch('/admin/thresholds').then(r => r.json()).then(({ thresholds }) => {
+          currentThresholds = thresholds;
+          container.querySelectorAll('.calib-current').forEach((td, i) => {
+            const key = suggestions[i]?.key;
+            if (key && thresholds[key]) td.textContent = fmt(thresholds[key].value);
+          });
+        }).catch(() => {});
+      } catch {
+        showToast('Failed to apply', 'error');
+        btn.disabled = false;
+        btn.textContent = `Apply ${Object.keys(updates).length} Threshold Updates`;
+      }
+    });
+  }
 }
 
 // ── Report ───────────────────────────────────────────────

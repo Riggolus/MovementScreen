@@ -266,9 +266,10 @@ async def admin_reset_threshold(key: str, admin: dict = Depends(get_admin_user))
 
 
 # ── Analysis route ────────────────────────────────────────
-def _result_to_json(result, camera_angle: str = "anterior") -> dict:
+def _result_to_json(result, camera_angle: str = "anterior", screen_type: str = "") -> dict:
     return {
         "screen_name": result.screen_name,
+        "screen_type": screen_type,
         "frame_count": result.frame_count,
         "camera_angle": camera_angle,
         "worst_severity": result.compensation_report.worst_severity.value,
@@ -285,12 +286,13 @@ def _result_to_json(result, camera_angle: str = "anterior") -> dict:
         ],
         "stats": [
             {
+                "field": field_key,
                 "name": s.name,
                 "min": round(s.min, 1) if s.min is not None else None,
                 "max": round(s.max, 1) if s.max is not None else None,
                 "mean": round(s.mean, 1) if s.mean is not None else None,
             }
-            for s in result.stats.values()
+            for field_key, s in result.stats.items()
             if s.mean is not None
         ],
     }
@@ -341,7 +343,7 @@ async def analyse(
                 detail="No pose detected. Make sure your full body is visible and well-lit.",
             )
 
-        result_json = _result_to_json(result, camera_angle)
+        result_json = _result_to_json(result, camera_angle, screen_type=screen)
 
         if user:
             assessment_id = await save_assessment(

@@ -69,8 +69,10 @@ class TrialAggregator:
         "lateral_flexion_degrees",
         "upper_trunk_angle",
         "spine_segmental_angle",
-        "tibial_angle_left", "tibial_angle_right",  # lower = worse (restricted DF)
-        "pelvic_tilt_degrees",                      # handled separately (signed)
+        "tibial_angle_left", "tibial_angle_right",      # lower = worse (restricted DF)
+        "pelvic_tilt_degrees",                          # handled separately (signed)
+        "left_knee_frontal_angle", "right_knee_frontal_angle",  # valgus proxy
+        "lateral_trunk_shift",                          # handled separately (abs)
     ]
 
     def __init__(self, screen_name: str) -> None:
@@ -107,6 +109,7 @@ class TrialAggregator:
             "left_ankle_dorsiflexion", "right_ankle_dorsiflexion",
             "tibial_angle_left", "tibial_angle_right",
             "spine_segmental_angle",
+            "left_knee_frontal_angle", "right_knee_frontal_angle",  # lower = more valgus = worse
         }
         # Fields where HIGHER is worse (more lean, more lateral flex)
         _max_is_worse = {

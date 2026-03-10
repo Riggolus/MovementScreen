@@ -124,7 +124,7 @@ def detect_compensations(
             if knee_angle is not None:
                 sev = _severity_from_thresholds(
                     knee_angle,
-                    mild=t.knee_valgus_moderate,
+                    mild=t.knee_valgus_mild,
                     moderate=t.knee_valgus_moderate,
                     severe=t.knee_valgus_severe,
                     lower_is_worse=True,

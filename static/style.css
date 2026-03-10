@@ -466,6 +466,45 @@ body {
 .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.toast-error { background: var(--severe); }
 
+/* ── Calibration panel ──────────────────────────────────── */
+.calib-intro {
+  font-size: 13px; color: var(--text-2); line-height: 1.55; margin-bottom: 16px;
+}
+.sens-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap;
+}
+.sens-label { font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
+.sens-btns { display: flex; gap: 4px; }
+.sens-btn {
+  padding: 5px 12px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--border); background: var(--surface-2);
+  font-size: 12px; font-weight: 600; color: var(--text-2);
+  cursor: pointer; transition: all .15s; font-family: inherit;
+}
+.sens-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.sens-desc-text { font-size: 11px; color: var(--text-3); margin-bottom: 14px; line-height: 1.45; }
+.calibration-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+  margin-bottom: 16px;
+}
+.calibration-table th {
+  text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--text-3); padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.calibration-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.calibration-table tr:last-child td { border-bottom: none; }
+.calib-label { font-size: 13px; color: var(--text); }
+.calib-key { display: block; font-size: 10px; color: var(--text-3); margin-top: 1px; }
+.calib-current { color: var(--text-3); font-size: 13px; font-variant-numeric: tabular-nums; }
+.calib-input {
+  width: 80px; padding: 5px 8px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--border); background: var(--surface-2);
+  font-size: 13px; font-family: inherit; color: var(--text);
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+.calib-input:focus { outline: none; border-color: var(--primary); background: var(--surface); }
+
 /* ── Assessment instructions card ──────────────────────── */
 .instructions-title {
   font-size: 15px; font-weight: 700; margin-bottom: 5px; color: var(--text);
