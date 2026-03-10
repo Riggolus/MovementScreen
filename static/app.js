@@ -129,6 +129,10 @@ function updateHeader() {
     return;
   }
   headerNav.innerHTML = `
+    <button class="nav-btn" id="nav-home-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Home
+    </button>
     <button class="nav-btn" id="nav-history-btn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       History
@@ -141,6 +145,7 @@ function updateHeader() {
     <span class="user-chip">${authUser.name.split(' ')[0]}</span>
     <button class="nav-btn danger" id="nav-logout-btn">Log out</button>
   `;
+  document.getElementById('nav-home-btn').addEventListener('click', () => showView('setup'));
   document.getElementById('nav-history-btn').addEventListener('click', loadHistory);
   document.getElementById('nav-logout-btn').addEventListener('click', logout);
   document.getElementById('nav-admin-btn')?.addEventListener('click', loadAdminPage);
@@ -494,9 +499,20 @@ async function uploadAndAnalyse() {
 }
 
 // ── Results rendering ─────────────────────────────────────
-const SEV_COLOR  = { none: 'var(--none)', mild: 'var(--mild)', moderate: 'var(--moderate)', severe: 'var(--severe)' };
-const SEV_LABEL  = { none: 'Pass', mild: 'Mild', moderate: 'Moderate', severe: 'Severe' };
-const SEV_EMOJI  = { none: '✓', mild: '●', moderate: '◆', severe: '▲' };
+const SEV_COLOR  = {
+  A: 'var(--grade-a)', B: 'var(--grade-b)', C: 'var(--grade-c)',
+  D: 'var(--grade-d)', E: 'var(--grade-e)', F: 'var(--grade-f)',
+  // legacy keys kept for cached/old API responses
+  none: 'var(--grade-a)', mild: 'var(--grade-c)', moderate: 'var(--grade-d)', severe: 'var(--grade-f)',
+};
+const SEV_LABEL  = {
+  A: 'Pass', B: 'Minimal', C: 'Mild', D: 'Moderate', E: 'Significant', F: 'Severe',
+  none: 'Pass', mild: 'Mild', moderate: 'Moderate', severe: 'Severe',
+};
+const SEV_EMOJI  = {
+  A: 'A', B: 'B', C: 'C', D: 'D', E: 'E', F: 'F',
+  none: 'A', mild: 'C', moderate: 'D', severe: 'F',
+};
 const ANGLE_LABEL = { anterior: 'Anterior', lateral: 'Lateral', posterior: 'Posterior' };
 
 function renderResults(data) {
