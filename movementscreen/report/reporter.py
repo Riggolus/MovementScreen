@@ -4,15 +4,17 @@ from pathlib import Path
 from typing import Sequence
 
 from movementscreen.analysis.aggregator import TrialResult, TrialStats
-from movementscreen.analysis.compensation import Severity
+from movementscreen.analysis.compensation import Grade
 
 
-# Severity colour mapping for plots
-_SEV_COLORS = {
-    Severity.NONE: "#2ecc71",
-    Severity.MILD: "#f1c40f",
-    Severity.MODERATE: "#e67e22",
-    Severity.SEVERE: "#e74c3c",
+# Grade colour mapping — green through red across the A–F scale
+_GRADE_COLORS = {
+    Grade.A: "#27ae60",  # green      — no compensation
+    Grade.B: "#82e0aa",  # light green — minimal
+    Grade.C: "#f1c40f",  # yellow     — mild
+    Grade.D: "#e67e22",  # orange     — moderate
+    Grade.E: "#cb4335",  # dark red   — significant
+    Grade.F: "#7b241c",  # deep red   — severe
 }
 
 
@@ -82,24 +84,24 @@ def plot_compensation_summary(result: TrialResult, output_path: str | Path | Non
         return
 
     labels = [f.name for f in findings]
-    severities = [f.severity for f in findings]
-    colors = [_SEV_COLORS[s] for s in severities]
-    # Use metric value as bar length when available, else use severity rank
-    _rank = {Severity.NONE: 0, Severity.MILD: 1, Severity.MODERATE: 2, Severity.SEVERE: 3}
-    values = [_rank[s] for s in severities]
+    grades = [f.severity for f in findings]
+    colors = [_GRADE_COLORS[g] for g in grades]
+    _rank = {Grade.A: 0, Grade.B: 1, Grade.C: 2, Grade.D: 3, Grade.E: 4, Grade.F: 5}
+    values = [_rank[g] for g in grades]
 
     import matplotlib.patches as mpatches
 
     fig, ax = plt.subplots(figsize=(8, max(3, len(labels) * 0.5 + 1)))
     bars = ax.barh(labels, values, color=colors)
-    ax.set_xlim(0, 3.5)
-    ax.set_xticks([1, 2, 3])
-    ax.set_xticklabels(["Mild", "Moderate", "Severe"])
+    ax.set_xlim(0, 5.5)
+    ax.set_xticks([1, 2, 3, 4, 5])
+    ax.set_xticklabels(["B", "C", "D", "E", "F"])
+    ax.set_xlabel("Grade")
     ax.set_title(f"{result.screen_name} — Compensation Findings")
 
     legend_handles = [
-        mpatches.Patch(color=_SEV_COLORS[s], label=s.value.capitalize())
-        for s in (Severity.MILD, Severity.MODERATE, Severity.SEVERE)
+        mpatches.Patch(color=_GRADE_COLORS[g], label=f"Grade {g.value}")
+        for g in (Grade.B, Grade.C, Grade.D, Grade.E, Grade.F)
     ]
     ax.legend(handles=legend_handles, loc="lower right")
     fig.tight_layout()
