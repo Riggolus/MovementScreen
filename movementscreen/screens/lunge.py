@@ -32,7 +32,7 @@ class LungeScreen(BaseScreen):
     def screen_type(self) -> str:
         return "lunge"
 
-    def accept_frame(self, frame: PoseFrame) -> bool:
+    def accept_frame(self, frame: PoseFrame, camera_angle: str = "anterior") -> bool:
         if not self._at_depth_only:
             return True
         g = frame.get

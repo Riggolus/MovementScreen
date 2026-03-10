@@ -18,6 +18,14 @@
   --moderate: #f97316;
   --severe:   #ef4444;
 
+  /* A–F grade palette */
+  --grade-a: #10b981;
+  --grade-b: #52c98a;
+  --grade-c: #f59e0b;
+  --grade-d: #f97316;
+  --grade-e: #cb4335;
+  --grade-f: #ef4444;
+
   --r:    14px;
   --r-sm: 8px;
   --r-lg: 20px;

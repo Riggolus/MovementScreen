@@ -41,7 +41,9 @@ class JointAngles:
     left_elbow_angle: float | None = None
     right_elbow_angle: float | None = None
 
-    # Knee valgus/varus: medial deviation of knee relative to hip-ankle line (2-D frontal)
+    # Knee valgus/varus: medial deviation of knee from hip-ankle alignment line,
+    # normalized by hip width. Positive = medial collapse (valgus); negative = varus.
+    # Only meaningful from a frontal (anterior/posterior) camera.
     left_knee_frontal_angle: float | None = None
     right_knee_frontal_angle: float | None = None
 
@@ -179,20 +181,36 @@ def compute_joint_angles(frame: PoseFrame) -> JointAngles:
             g(LM.RIGHT_WRIST).as_array(),
         )
 
-    # --- Knee frontal plane angle (valgus/varus proxy in 2-D) ---
-    # Angle at knee between hip and ankle in the frontal (x-y) plane
-    if all(g(lm).visible for lm in (LM.LEFT_HIP, LM.LEFT_KNEE, LM.LEFT_ANKLE)):
-        angles.left_knee_frontal_angle = angle_between(
-            g(LM.LEFT_HIP).as_array(),
-            g(LM.LEFT_KNEE).as_array(),
-            g(LM.LEFT_ANKLE).as_array(),
-        )
-    if all(g(lm).visible for lm in (LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE)):
-        angles.right_knee_frontal_angle = angle_between(
-            g(LM.RIGHT_HIP).as_array(),
-            g(LM.RIGHT_KNEE).as_array(),
-            g(LM.RIGHT_ANKLE).as_array(),
-        )
+    # --- Knee frontal deviation (valgus proxy, frontal camera) ---
+    # Measures how far the knee deviates medially from the hip-ankle alignment line.
+    # Positive = medial collapse (valgus); negative = lateral bow (varus).
+    # Normalized by hip width so the metric is body-size independent.
+    # Unlike a 3-point angle, this is independent of squat depth and only captures
+    # the lateral/medial displacement that is visible from an anterior/posterior camera.
+    if frame.bilateral_visible(LM.LEFT_HIP, LM.RIGHT_HIP):
+        hip_width = abs(g(LM.LEFT_HIP).as_array()[0] - g(LM.RIGHT_HIP).as_array()[0])
+        if hip_width > 0.01:
+            for side, (hip_lm, knee_lm, ankle_lm) in [
+                ("left",  (LM.LEFT_HIP,  LM.LEFT_KNEE,  LM.LEFT_ANKLE)),
+                ("right", (LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE)),
+            ]:
+                if all(g(lm).visible for lm in (hip_lm, knee_lm, ankle_lm)):
+                    hip   = g(hip_lm).as_array()
+                    knee  = g(knee_lm).as_array()
+                    ankle = g(ankle_lm).as_array()
+                    dy = ankle[1] - hip[1]
+                    if abs(dy) > 0.01:
+                        # Expected knee x on the straight hip-ankle line at knee's y
+                        t = (knee[1] - hip[1]) / dy
+                        expected_x = hip[0] + t * (ankle[0] - hip[0])
+                        # Positive = medial collapse (valgus) for each side:
+                        # Left leg:  knee shifts right (+x direction) toward midline
+                        # Right leg: knee shifts left  (-x direction) toward midline
+                        if side == "left":
+                            deviation = (knee[0] - expected_x) / hip_width
+                        else:
+                            deviation = (expected_x - knee[0]) / hip_width
+                        setattr(angles, f"{side}_knee_frontal_angle", float(deviation))
 
     # --- Tibial angle (tibia from vertical) ---
     # Measures forward inclination of the shin — proxy for ankle dorsiflexion from lateral view.

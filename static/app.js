@@ -129,6 +129,10 @@ function updateHeader() {
     return;
   }
   headerNav.innerHTML = `
+    <button class="nav-btn" id="nav-home-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Home
+    </button>
     <button class="nav-btn" id="nav-history-btn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       History
@@ -141,6 +145,7 @@ function updateHeader() {
     <span class="user-chip">${authUser.name.split(' ')[0]}</span>
     <button class="nav-btn danger" id="nav-logout-btn">Log out</button>
   `;
+  document.getElementById('nav-home-btn').addEventListener('click', () => showView('setup'));
   document.getElementById('nav-history-btn').addEventListener('click', loadHistory);
   document.getElementById('nav-logout-btn').addEventListener('click', logout);
   document.getElementById('nav-admin-btn')?.addEventListener('click', loadAdminPage);
@@ -494,9 +499,20 @@ async function uploadAndAnalyse() {
 }
 
 // ── Results rendering ─────────────────────────────────────
-const SEV_COLOR  = { none: 'var(--none)', mild: 'var(--mild)', moderate: 'var(--moderate)', severe: 'var(--severe)' };
-const SEV_LABEL  = { none: 'Pass', mild: 'Mild', moderate: 'Moderate', severe: 'Severe' };
-const SEV_EMOJI  = { none: '✓', mild: '●', moderate: '◆', severe: '▲' };
+const SEV_COLOR  = {
+  A: 'var(--grade-a)', B: 'var(--grade-b)', C: 'var(--grade-c)',
+  D: 'var(--grade-d)', E: 'var(--grade-e)', F: 'var(--grade-f)',
+  // legacy keys kept for cached/old API responses
+  none: 'var(--grade-a)', mild: 'var(--grade-c)', moderate: 'var(--grade-d)', severe: 'var(--grade-f)',
+};
+const SEV_LABEL  = {
+  A: 'Pass', B: 'Minimal', C: 'Mild', D: 'Moderate', E: 'Significant', F: 'Severe',
+  none: 'Pass', mild: 'Mild', moderate: 'Moderate', severe: 'Severe',
+};
+const SEV_EMOJI  = {
+  A: 'A', B: 'B', C: 'C', D: 'D', E: 'E', F: 'F',
+  none: 'A', mild: 'C', moderate: 'D', severe: 'F',
+};
 const ANGLE_LABEL = { anterior: 'Anterior', lateral: 'Lateral', posterior: 'Posterior' };
 
 function renderResults(data) {
@@ -533,15 +549,18 @@ function renderResults(data) {
   }
 
   if (data.stats.length > 0) {
+    // Normalized (unitless) metrics — display without the degree symbol
+    const NORMALIZED_FIELDS = new Set(['left_knee_frontal_angle', 'right_knee_frontal_angle', 'lateral_trunk_shift', 'head_forward_offset']);
     html += `<h2 class="section-title">Joint Angles</h2><div class="stats-grid">`;
     for (const s of data.stats) {
+      const unit = NORMALIZED_FIELDS.has(s.field) ? '' : '°';
       html += `
         <div class="stat-card">
           <div class="stat-name">${s.name}</div>
           <div class="stat-values">
-            <div class="stat-item"><span class="stat-label">Min</span><span class="stat-value">${s.min}°</span></div>
-            <div class="stat-item main"><span class="stat-label">Mean</span><span class="stat-value">${s.mean}°</span></div>
-            <div class="stat-item"><span class="stat-label">Max</span><span class="stat-value">${s.max}°</span></div>
+            <div class="stat-item"><span class="stat-label">Min</span><span class="stat-value">${s.min}${unit}</span></div>
+            <div class="stat-item main"><span class="stat-label">Mean</span><span class="stat-value">${s.mean}${unit}</span></div>
+            <div class="stat-item"><span class="stat-label">Max</span><span class="stat-value">${s.max}${unit}</span></div>
           </div>
         </div>
       `;
@@ -1483,7 +1502,7 @@ function renderReport(data, source) {
       <table class="report-stats-table">
         <thead><tr><th>Measurement</th><th>Min</th><th>Mean</th><th>Max</th></tr></thead>
         <tbody>
-          ${data.stats.map(s => `<tr><td>${s.name}</td><td>${s.min}°</td><td>${s.mean}°</td><td>${s.max}°</td></tr>`).join('')}
+          ${data.stats.map(s => { const u = ['left_knee_frontal_angle','right_knee_frontal_angle','lateral_trunk_shift','head_forward_offset'].includes(s.field) ? '' : '°'; return `<tr><td>${s.name}</td><td>${s.min}${u}</td><td>${s.mean}${u}</td><td>${s.max}${u}</td></tr>`; }).join('')}
         </tbody>
       </table>
     `;

@@ -9,18 +9,33 @@ from movementscreen.thresholds import ThresholdConfig
 from movementscreen.utils.geometry import asymmetry_ratio
 
 
-class Severity(Enum):
-    NONE = "none"
-    MILD = "mild"
-    MODERATE = "moderate"
-    SEVERE = "severe"
+class Grade(Enum):
+    """A–F compensation grade.
+
+    A  No compensation — movement within normal limits
+    B  Minimal — barely detectable deviation, monitor only
+    C  Mild — noticeable compensation, address in programming
+    D  Moderate — clear dysfunction, prioritise in plan
+    E  Significant — marked compensation, intervention needed
+    F  Severe — major dysfunction, refer or restrict loading
+    """
+    A = "A"
+    B = "B"
+    C = "C"
+    D = "D"
+    E = "E"
+    F = "F"
+
+
+# Backward-compatible alias so any code still importing Severity doesn't break immediately
+Severity = Grade
 
 
 @dataclass
 class Finding:
     """A single detected compensation pattern."""
     name: str
-    severity: Severity
+    severity: Grade
     description: str
     metric_value: float | None = None
     metric_label: str | None = None
@@ -45,10 +60,10 @@ class CompensationReport:
         return bool(self.findings)
 
     @property
-    def worst_severity(self) -> Severity:
-        order = [Severity.NONE, Severity.MILD, Severity.MODERATE, Severity.SEVERE]
+    def worst_severity(self) -> Grade:
+        order = [Grade.A, Grade.B, Grade.C, Grade.D, Grade.E, Grade.F]
         if not self.findings:
-            return Severity.NONE
+            return Grade.A
         return max(self.findings, key=lambda f: order.index(f.severity)).severity
 
     def __str__(self) -> str:
@@ -57,29 +72,47 @@ class CompensationReport:
         return "\n".join(str(f) for f in self.findings)
 
 
-def _severity_from_thresholds(
+def _grade_from_thresholds(
     value: float,
-    mild: float,
-    moderate: float,
-    severe: float | None = None,
+    b: float,
+    c: float,
+    d: float,
+    e: float | None = None,
+    f: float | None = None,
     lower_is_worse: bool = False,
-) -> Severity:
+) -> Grade:
+    """Return the compensation Grade for *value* given ordered band boundaries.
+
+    For higher-is-worse metrics (e.g. trunk lean):
+        A < b ≤ B < c ≤ C < d ≤ D < e ≤ E < f ≤ F
+
+    For lower-is-worse metrics (e.g. knee frontal angle):
+        A > b ≥ B > c ≥ C > d ≥ D > e ≥ E > f ≥ F
+    """
     if lower_is_worse:
-        if severe is not None and value <= severe:
-            return Severity.SEVERE
-        if value <= moderate:
-            return Severity.MODERATE
-        if value <= mild:
-            return Severity.MILD
-        return Severity.NONE
+        if f is not None and value <= f:
+            return Grade.F
+        if e is not None and value <= e:
+            return Grade.E
+        if value <= d:
+            return Grade.D
+        if value <= c:
+            return Grade.C
+        if value <= b:
+            return Grade.B
+        return Grade.A
     else:
-        if severe is not None and value >= severe:
-            return Severity.SEVERE
-        if value >= moderate:
-            return Severity.MODERATE
-        if value >= mild:
-            return Severity.MILD
-        return Severity.NONE
+        if f is not None and value >= f:
+            return Grade.F
+        if e is not None and value >= e:
+            return Grade.E
+        if value >= d:
+            return Grade.D
+        if value >= c:
+            return Grade.C
+        if value >= b:
+            return Grade.B
+        return Grade.A
 
 
 def detect_compensations(
@@ -114,28 +147,27 @@ def detect_compensations(
     if is_frontal:
 
         # --- Knee valgus (frontal plane collapse) ---
-        # The hip-knee-ankle angle in 2D is a valid valgus proxy only when the
-        # camera sees the frontal plane. From a lateral camera the same landmarks
-        # produce the sagittal knee-flexion angle, which is meaningless here.
-        for side, knee_angle in (
+        # Positive deviation = knee is medial to the hip-ankle line = valgus.
+        # This metric is camera-angle-independent in the sense that it only fires
+        # here (frontal gate) where the x-axis captures the medial/lateral direction.
+        for side, deviation in (
             ("Left",  angles.left_knee_frontal_angle),
             ("Right", angles.right_knee_frontal_angle),
         ):
-            if knee_angle is not None:
-                sev = _severity_from_thresholds(
-                    knee_angle,
-                    mild=t.knee_valgus_mild,
-                    moderate=t.knee_valgus_moderate,
-                    severe=t.knee_valgus_severe,
-                    lower_is_worse=True,
+            if deviation is not None:
+                sev = _grade_from_thresholds(
+                    deviation,
+                    b=t.knee_valgus_b, c=t.knee_valgus_c, d=t.knee_valgus_d,
+                    e=t.knee_valgus_e, f=t.knee_valgus_f,
+                    lower_is_worse=False,  # higher deviation = worse
                 )
-                if sev != Severity.NONE:
+                if sev != Grade.A:
                     report.add(Finding(
                         name=f"{side} Knee Valgus",
                         severity=sev,
-                        description=f"{side.lower()} knee collapsing medially",
-                        metric_value=round(knee_angle, 1),
-                        metric_label="knee frontal angle (deg)",
+                        description=f"{side.lower()} knee collapsing medially toward the midline",
+                        metric_value=round(deviation, 3),
+                        metric_label="knee medial deviation (normalized)",
                     ))
 
         # --- Lateral trunk shift ---
@@ -144,13 +176,12 @@ def detect_compensations(
         # a different (and already covered) measurement.
         if angles.lateral_trunk_shift is not None:
             shift = abs(angles.lateral_trunk_shift)
-            sev = _severity_from_thresholds(
+            sev = _grade_from_thresholds(
                 shift,
-                mild=t.lateral_shift_mild,
-                moderate=t.lateral_shift_moderate,
-                severe=t.lateral_shift_severe,
+                b=t.lateral_shift_b, c=t.lateral_shift_c, d=t.lateral_shift_d,
+                e=t.lateral_shift_e, f=t.lateral_shift_f,
             )
-            if sev != Severity.NONE:
+            if sev != Grade.A:
                 direction = "right" if angles.lateral_trunk_shift > 0 else "left"
                 report.add(Finding(
                     name=f"Lateral Trunk Shift ({direction})",
@@ -163,10 +194,12 @@ def detect_compensations(
         # --- Pelvic tilt (hip line from horizontal) ---
         if angles.pelvic_tilt_degrees is not None:
             tilt = abs(angles.pelvic_tilt_degrees)
-            sev = _severity_from_thresholds(
-                tilt, t.pelvic_tilt_mild, t.pelvic_tilt_moderate, t.pelvic_tilt_severe
+            sev = _grade_from_thresholds(
+                tilt,
+                b=t.pelvic_tilt_b, c=t.pelvic_tilt_c, d=t.pelvic_tilt_d,
+                e=t.pelvic_tilt_e, f=t.pelvic_tilt_f,
             )
-            if sev != Severity.NONE:
+            if sev != Grade.A:
                 drop_side = "right" if angles.pelvic_tilt_degrees > 0 else "left"
                 report.add(Finding(
                     name=f"Pelvic Tilt ({drop_side} drop)",
@@ -183,10 +216,12 @@ def detect_compensations(
         # arctan of horizontal/vertical trunk offset — only valid from frontal view.
         if angles.lateral_flexion_degrees is not None:
             lflex = abs(angles.lateral_flexion_degrees)
-            sev = _severity_from_thresholds(
-                lflex, t.lateral_flexion_mild, t.lateral_flexion_moderate, t.lateral_flexion_severe
+            sev = _grade_from_thresholds(
+                lflex,
+                b=t.lateral_flexion_b, c=t.lateral_flexion_c, d=t.lateral_flexion_d,
+                e=t.lateral_flexion_e, f=t.lateral_flexion_f,
             )
-            if sev != Severity.NONE and angles.lateral_trunk_shift is not None:
+            if sev != Grade.A and angles.lateral_trunk_shift is not None:
                 direction = "right" if angles.lateral_trunk_shift > 0 else "left"
                 report.add(Finding(
                     name=f"Lateral Spinal Flexion ({direction})",
@@ -221,22 +256,18 @@ def detect_compensations(
         # lateral tilt (already covered by lateral_flexion_degrees).
         if angles.trunk_lean_degrees is not None:
             if screen_type == "squat":
-                lean_mild     = t.squat_trunk_lean_mild
-                lean_moderate = t.squat_trunk_lean_moderate
-                lean_severe   = t.squat_trunk_lean_severe
+                lb, lc, ld = t.squat_trunk_lean_b, t.squat_trunk_lean_c, t.squat_trunk_lean_d
+                le, lf = t.squat_trunk_lean_e, t.squat_trunk_lean_f
                 note = " (optimal squat range: 20–40°)"
             else:
-                lean_mild     = t.trunk_lean_mild
-                lean_moderate = t.trunk_lean_moderate
-                lean_severe   = t.trunk_lean_severe
+                lb, lc, ld = t.trunk_lean_b, t.trunk_lean_c, t.trunk_lean_d
+                le, lf = t.trunk_lean_e, t.trunk_lean_f
                 note = ""
-            sev = _severity_from_thresholds(
+            sev = _grade_from_thresholds(
                 angles.trunk_lean_degrees,
-                mild=lean_mild,
-                moderate=lean_moderate,
-                severe=lean_severe,
+                b=lb, c=lc, d=ld, e=le, f=lf,
             )
-            if sev != Severity.NONE:
+            if sev != Grade.A:
                 report.add(Finding(
                     name="Excessive Forward Trunk Lean",
                     severity=sev,
@@ -252,14 +283,13 @@ def detect_compensations(
             ("Right", angles.tibial_angle_right),
         ):
             if angle is not None:
-                sev = _severity_from_thresholds(
+                sev = _grade_from_thresholds(
                     angle,
-                    mild=t.tibial_angle_restricted_mild,
-                    moderate=t.tibial_angle_restricted_mild,
-                    severe=t.tibial_angle_restricted_severe,
+                    b=t.tibial_angle_b, c=t.tibial_angle_c, d=t.tibial_angle_d,
+                    e=t.tibial_angle_e, f=t.tibial_angle_f,
                     lower_is_worse=True,
                 )
-                if sev != Severity.NONE:
+                if sev != Grade.A:
                     report.add(Finding(
                         name=f"{side} Restricted Dorsiflexion",
                         severity=sev,
@@ -280,14 +310,13 @@ def detect_compensations(
             ("Right", angles.right_ankle_dorsiflexion),
         ):
             if df is not None and f"{side} Restricted Dorsiflexion" not in tibial_flagged:
-                sev = _severity_from_thresholds(
+                sev = _grade_from_thresholds(
                     df,
-                    mild=t.ankle_df_mild,
-                    moderate=t.ankle_df_moderate,
-                    severe=None,
+                    b=t.ankle_df_b, c=t.ankle_df_c, d=t.ankle_df_d,
+                    e=t.ankle_df_e, f=t.ankle_df_f,
                     lower_is_worse=True,
                 )
-                if sev != Severity.NONE:
+                if sev != Grade.A:
                     report.add(Finding(
                         name=f"{side} Heel Rise / Limited Dorsiflexion",
                         severity=sev,
@@ -299,10 +328,12 @@ def detect_compensations(
         # --- Head forward posture ---
         if angles.head_forward_offset is not None:
             offset = abs(angles.head_forward_offset)
-            sev = _severity_from_thresholds(
-                offset, t.head_forward_mild, t.head_forward_moderate, t.head_forward_severe
+            sev = _grade_from_thresholds(
+                offset,
+                b=t.head_forward_b, c=t.head_forward_c, d=t.head_forward_d,
+                e=t.head_forward_e, f=t.head_forward_f,
             )
-            if sev != Severity.NONE:
+            if sev != Grade.A:
                 report.add(Finding(
                     name="Head Forward Posture",
                     severity=sev,
@@ -313,11 +344,12 @@ def detect_compensations(
 
         # --- Upper trunk flexion ---
         if angles.upper_trunk_angle is not None:
-            sev = _severity_from_thresholds(
+            sev = _grade_from_thresholds(
                 angles.upper_trunk_angle,
-                t.upper_trunk_mild, t.upper_trunk_moderate, t.upper_trunk_severe,
+                b=t.upper_trunk_b, c=t.upper_trunk_c, d=t.upper_trunk_d,
+                e=t.upper_trunk_e, f=t.upper_trunk_f,
             )
-            if sev != Severity.NONE:
+            if sev != Grade.A:
                 report.add(Finding(
                     name="Upper Trunk Flexion",
                     severity=sev,
@@ -335,10 +367,12 @@ def detect_compensations(
         if angles.spine_segmental_angle is not None:
             deviation = 180.0 - angles.spine_segmental_angle
             if deviation > 0:
-                sev = _severity_from_thresholds(
-                    deviation, t.spine_curve_mild, t.spine_curve_moderate, t.spine_curve_severe
+                sev = _grade_from_thresholds(
+                    deviation,
+                    b=t.spine_curve_b, c=t.spine_curve_c, d=t.spine_curve_d,
+                    e=t.spine_curve_e, f=t.spine_curve_f,
                 )
-                if sev != Severity.NONE:
+                if sev != Grade.A:
                     report.add(Finding(
                         name="Spinal Segmental Curvature",
                         severity=sev,
@@ -368,13 +402,12 @@ def _check_bilateral_asymmetry(
     if left is None or right is None:
         return
     ratio = asymmetry_ratio(left, right)
-    sev = _severity_from_thresholds(
+    sev = _grade_from_thresholds(
         ratio,
-        mild=t.asymmetry_mild,
-        moderate=t.asymmetry_moderate,
-        severe=t.asymmetry_severe,
+        b=t.asymmetry_b, c=t.asymmetry_c, d=t.asymmetry_d,
+        e=t.asymmetry_e, f=t.asymmetry_f,
     )
-    if sev != Severity.NONE:
+    if sev != Grade.A:
         report.add(Finding(
             name=f"Bilateral {label} Asymmetry",
             severity=sev,

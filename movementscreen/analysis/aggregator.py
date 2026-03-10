@@ -109,13 +109,13 @@ class TrialAggregator:
             "left_ankle_dorsiflexion", "right_ankle_dorsiflexion",
             "tibial_angle_left", "tibial_angle_right",
             "spine_segmental_angle",
-            "left_knee_frontal_angle", "right_knee_frontal_angle",  # lower = more valgus = worse
         }
-        # Fields where HIGHER is worse (more lean, more lateral flex)
+        # Fields where HIGHER is worse (more lean, more lateral flex, more valgus deviation)
         _max_is_worse = {
             "trunk_lean_degrees",
             "lateral_flexion_degrees",
             "upper_trunk_angle",
+            "left_knee_frontal_angle", "right_knee_frontal_angle",  # higher deviation = more valgus = worse
         }
 
         for field_name in self._TRACKED_FIELDS:
