@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <changeSet id="002-create-assessments" author="movementscreen">
+        <createTable tableName="assessments">
+            <column name="id" type="UUID" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="UUID">
+                <constraints nullable="false"
+                    foreignKeyName="fk_assessments_user"
+                    references="users(id)"
+                    deleteCascade="true"/>
+            </column>
+            <column name="screen_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="camera_angle" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lead_side" type="VARCHAR(10)"/>
+            <column name="frame_count" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="worst_severity" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="has_findings" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="recorded_at" type="TIMESTAMPTZ" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="assessments" indexName="idx_assessments_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        <createIndex tableName="assessments" indexName="idx_assessments_recorded_at">
+            <column name="recorded_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

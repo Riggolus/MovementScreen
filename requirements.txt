@@ -1,0 +1,15 @@
+mediapipe>=0.10.30
+opencv-python>=4.8.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+dataclasses-json>=0.6.0
+fastapi>=0.110.0
+uvicorn>=0.29.0
+python-multipart>=0.0.9
+asyncpg>=0.29.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+PyJWT>=2.8.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+pytest>=7.4.0

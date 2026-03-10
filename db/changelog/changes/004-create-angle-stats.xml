@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <changeSet id="004-create-angle-stats" author="movementscreen">
+        <createTable tableName="angle_stats">
+            <column name="id" type="UUID" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="assessment_id" type="UUID">
+                <constraints nullable="false"
+                    foreignKeyName="fk_angle_stats_assessment"
+                    references="assessments(id)"
+                    deleteCascade="true"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="min_value"  type="NUMERIC(8,2)"/>
+            <column name="max_value"  type="NUMERIC(8,2)"/>
+            <column name="mean_value" type="NUMERIC(8,2)"/>
+        </createTable>
+
+        <createIndex tableName="angle_stats" indexName="idx_angle_stats_assessment_id">
+            <column name="assessment_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
