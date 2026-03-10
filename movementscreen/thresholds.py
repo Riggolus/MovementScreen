@@ -43,12 +43,12 @@ except ImportError:  # not required outside server context
 # ---------------------------------------------------------------------------
 
 DESCRIPTIONS: dict[str, str] = {
-    # Knee valgus (lower angle = more collapse; lower is worse)
-    "knee_valgus_b": "Knee frontal angle (°) ≤ which Grade B (minimal) valgus is flagged (~1° inward)",
-    "knee_valgus_c": "Knee frontal angle (°) ≤ which Grade C (mild) valgus is flagged (~3° inward)",
-    "knee_valgus_d": "Knee frontal angle (°) ≤ which Grade D (moderate) valgus is flagged (~7° inward)",
-    "knee_valgus_e": "Knee frontal angle (°) ≤ which Grade E (significant) valgus is flagged (~10° inward)",
-    "knee_valgus_f": "Knee frontal angle (°) ≤ which Grade F (severe) valgus is flagged (~15° inward)",
+    # Knee valgus (medial knee deviation normalised by hip width; higher = worse)
+    "knee_valgus_b": "Knee medial deviation (normalised) ≥ which Grade B valgus is flagged (~2 % hip width)",
+    "knee_valgus_c": "Knee medial deviation (normalised) ≥ which Grade C valgus is flagged (~5 % hip width)",
+    "knee_valgus_d": "Knee medial deviation (normalised) ≥ which Grade D valgus is flagged (~10 % hip width)",
+    "knee_valgus_e": "Knee medial deviation (normalised) ≥ which Grade E valgus is flagged (~15 % hip width)",
+    "knee_valgus_f": "Knee medial deviation (normalised) ≥ which Grade F valgus is flagged (~20 % hip width)",
     # Forward trunk lean
     "trunk_lean_b": "Forward trunk lean (°) ≥ which Grade B (minimal) lean is flagged",
     "trunk_lean_c": "Forward trunk lean (°) ≥ which Grade C (mild) lean is flagged",
@@ -126,13 +126,13 @@ DESCRIPTIONS: dict[str, str] = {
 class ThresholdConfig:
     """All configurable compensation thresholds with their hardcoded defaults."""
 
-    # Knee valgus (frontal angle; lower = more collapsed; lower is worse)
-    # 180° = perfectly straight alignment in the frontal plane
-    knee_valgus_b: float = 179.0  # ~1° inward — barely detectable
-    knee_valgus_c: float = 177.0  # ~3° inward — noticeable
-    knee_valgus_d: float = 173.0  # ~7° inward — clinically significant
-    knee_valgus_e: float = 170.0  # ~10° inward — marked collapse
-    knee_valgus_f: float = 165.0  # ~15° inward — major collapse
+    # Knee valgus: medial deviation of knee from hip-ankle line, normalised by hip width.
+    # Positive = valgus (knee collapses inward); higher = worse.
+    knee_valgus_b: float = 0.02   # ~2 % hip-width — barely detectable
+    knee_valgus_c: float = 0.05   # ~5 % — noticeable inward tracking
+    knee_valgus_d: float = 0.10   # ~10 % — clinically significant
+    knee_valgus_e: float = 0.15   # ~15 % — marked collapse
+    knee_valgus_f: float = 0.20   # ~20 % — major collapse
 
     # Forward trunk lean (higher is worse)
     trunk_lean_b: float = 15.0

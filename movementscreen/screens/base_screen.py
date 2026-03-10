@@ -34,13 +34,13 @@ class BaseScreen(ABC):
         """Process all frames and return the aggregated trial result."""
         aggregator = TrialAggregator(screen_name=self.name)
         for frame in frames:
-            if self.accept_frame(frame):
+            if self.accept_frame(frame, camera_angle):
                 angles = compute_joint_angles(frame)
                 angles = self.augment_angles(angles, frame)
                 aggregator.add_frame(angles)
         return aggregator.finalize(camera_angle=camera_angle, thresholds=thresholds, screen_type=self.screen_type)
 
-    def accept_frame(self, frame: PoseFrame) -> bool:
+    def accept_frame(self, frame: PoseFrame, camera_angle: str = "anterior") -> bool:
         """Return True if this frame should be included in analysis.
 
         Override to gate on movement phase (e.g., bottom of squat only).

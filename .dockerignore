@@ -1,0 +1,43 @@
+# Version control
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+dist
+build
+.eggs
+
+# Virtual environments
+.venv
+venv
+env
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Test artefacts
+.pytest_cache
+.coverage
+htmlcov
+tests/
+
+# Development tooling
+.mypy_cache
+.ruff_cache
+.idea
+.vscode
+*.code-workspace
+
+# Terraform state (never bake secrets into the image)
+terraform/
+
+# Local DB seeds / dev scripts
+db/seed_admin_dev.*

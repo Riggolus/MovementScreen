@@ -549,15 +549,18 @@ function renderResults(data) {
   }
 
   if (data.stats.length > 0) {
+    // Normalized (unitless) metrics — display without the degree symbol
+    const NORMALIZED_FIELDS = new Set(['left_knee_frontal_angle', 'right_knee_frontal_angle', 'lateral_trunk_shift', 'head_forward_offset']);
     html += `<h2 class="section-title">Joint Angles</h2><div class="stats-grid">`;
     for (const s of data.stats) {
+      const unit = NORMALIZED_FIELDS.has(s.field) ? '' : '°';
       html += `
         <div class="stat-card">
           <div class="stat-name">${s.name}</div>
           <div class="stat-values">
-            <div class="stat-item"><span class="stat-label">Min</span><span class="stat-value">${s.min}°</span></div>
-            <div class="stat-item main"><span class="stat-label">Mean</span><span class="stat-value">${s.mean}°</span></div>
-            <div class="stat-item"><span class="stat-label">Max</span><span class="stat-value">${s.max}°</span></div>
+            <div class="stat-item"><span class="stat-label">Min</span><span class="stat-value">${s.min}${unit}</span></div>
+            <div class="stat-item main"><span class="stat-label">Mean</span><span class="stat-value">${s.mean}${unit}</span></div>
+            <div class="stat-item"><span class="stat-label">Max</span><span class="stat-value">${s.max}${unit}</span></div>
           </div>
         </div>
       `;
@@ -1499,7 +1502,7 @@ function renderReport(data, source) {
       <table class="report-stats-table">
         <thead><tr><th>Measurement</th><th>Min</th><th>Mean</th><th>Max</th></tr></thead>
         <tbody>
-          ${data.stats.map(s => `<tr><td>${s.name}</td><td>${s.min}°</td><td>${s.mean}°</td><td>${s.max}°</td></tr>`).join('')}
+          ${data.stats.map(s => { const u = ['left_knee_frontal_angle','right_knee_frontal_angle','lateral_trunk_shift','head_forward_offset'].includes(s.field) ? '' : '°'; return `<tr><td>${s.name}</td><td>${s.min}${u}</td><td>${s.mean}${u}</td><td>${s.max}${u}</td></tr>`; }).join('')}
         </tbody>
       </table>
     `;

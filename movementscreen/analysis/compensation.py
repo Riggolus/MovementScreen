@@ -147,27 +147,27 @@ def detect_compensations(
     if is_frontal:
 
         # --- Knee valgus (frontal plane collapse) ---
-        # The hip-knee-ankle angle in 2D is a valid valgus proxy only when the
-        # camera sees the frontal plane. From a lateral camera the same landmarks
-        # produce the sagittal knee-flexion angle, which is meaningless here.
-        for side, knee_angle in (
+        # Positive deviation = knee is medial to the hip-ankle line = valgus.
+        # This metric is camera-angle-independent in the sense that it only fires
+        # here (frontal gate) where the x-axis captures the medial/lateral direction.
+        for side, deviation in (
             ("Left",  angles.left_knee_frontal_angle),
             ("Right", angles.right_knee_frontal_angle),
         ):
-            if knee_angle is not None:
+            if deviation is not None:
                 sev = _grade_from_thresholds(
-                    knee_angle,
+                    deviation,
                     b=t.knee_valgus_b, c=t.knee_valgus_c, d=t.knee_valgus_d,
                     e=t.knee_valgus_e, f=t.knee_valgus_f,
-                    lower_is_worse=True,
+                    lower_is_worse=False,  # higher deviation = worse
                 )
                 if sev != Grade.A:
                     report.add(Finding(
                         name=f"{side} Knee Valgus",
                         severity=sev,
-                        description=f"{side.lower()} knee collapsing medially",
-                        metric_value=round(knee_angle, 1),
-                        metric_label="knee frontal angle (deg)",
+                        description=f"{side.lower()} knee collapsing medially toward the midline",
+                        metric_value=round(deviation, 3),
+                        metric_label="knee medial deviation (normalized)",
                     ))
 
         # --- Lateral trunk shift ---

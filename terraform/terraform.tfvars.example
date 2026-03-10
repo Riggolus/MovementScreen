@@ -1,0 +1,26 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is listed in .gitignore — never commit it.
+
+# ── Required ──────────────────────────────────────────────────────────────────
+
+# Render API key — Dashboard → Account Settings → API Keys
+render_api_key = "rnd_xxxxxxxxxxxxxxxxxxxx"
+
+# Render owner ID — see variables.tf for how to find this
+render_owner_id = "usr_xxxxxxxxxxxxxxxxxxxx"
+
+# Full HTTPS URL of your GitHub repository
+github_repo_url = "https://github.com/your-username/MovementScreen"
+
+# Strong random secret for JWT signing (min 32 chars)
+# Generate: python -c "import secrets; print(secrets.token_hex(32))"
+jwt_secret = "replace-with-a-long-random-secret-at-least-32-chars"
+
+# ── Optional (defaults shown) ─────────────────────────────────────────────────
+
+# app_name      = "movementscreen"
+# region        = "oregon"
+# github_branch = "main"
+# web_plan      = "starter"   # upgrade to "standard" for production
+# db_plan       = "free"      # upgrade to "basic_256mb" for persistent storage
+# db_version    = "16"

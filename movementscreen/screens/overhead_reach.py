@@ -25,7 +25,7 @@ class OverheadReachScreen(BaseScreen):
     def screen_type(self) -> str:
         return "overhead"
 
-    def accept_frame(self, frame: PoseFrame) -> bool:
+    def accept_frame(self, frame: PoseFrame, camera_angle: str = "anterior") -> bool:
         g = frame.get
         # Accept only frames where at least one wrist is above the nose
         for wrist, nose in ((LM.LEFT_WRIST, LM.NOSE), (LM.RIGHT_WRIST, LM.NOSE)):
