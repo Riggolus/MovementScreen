@@ -1,6 +1,6 @@
 output "app_url" {
   description = "Public URL of the deployed MovementScreen application."
-  value       = "https://${render_web_service.web.url}"
+  value       = render_web_service.web.url
 }
 
 output "service_id" {
