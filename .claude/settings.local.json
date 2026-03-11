@@ -6,7 +6,9 @@
       "WebFetch(domain:registry.terraform.io)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(gh api:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s -H \"Authorization: Bearer rnd_k5MdOzXu3CzfpCAJMfEPkQzOAA6H\" \"https://api.render.com/v1/owners?limit=1\")",
+      "Bash(where py:*)"
     ]
   }
 }
