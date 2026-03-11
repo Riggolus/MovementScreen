@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <changeSet id="003-create-findings" author="movementscreen">
+        <createTable tableName="findings">
+            <column name="id" type="UUID" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="assessment_id" type="UUID">
+                <constraints nullable="false"
+                    foreignKeyName="fk_findings_assessment"
+                    references="assessments(id)"
+                    deleteCascade="true"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="severity" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="metric_value" type="NUMERIC(8,2)"/>
+            <column name="metric_label" type="VARCHAR(255)"/>
+        </createTable>
+
+        <createIndex tableName="findings" indexName="idx_findings_assessment_id">
+            <column name="assessment_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

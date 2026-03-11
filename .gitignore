@@ -1,0 +1,28 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+results/
+*.mp4
+*.mov
+*.avi
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Terraform — state files and tfvars contain secrets / generated IDs
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
+
+# MediaPipe models (downloaded at build time, no need to track)
+movementscreen/pose/models/*.task
