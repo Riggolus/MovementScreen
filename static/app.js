@@ -394,7 +394,9 @@ const ANGLE_LABEL = { anterior: 'Anterior', lateral: 'Lateral', posterior: 'Post
 
 function renderResults(data) {
   const sev = data.worst_severity, color = SEV_COLOR[sev];
+  const summary = generateSummary(data);
 
+  // ── Header ──────────────────────────────────────────────
   let html = `
     <div class="results-header">
       <div class="results-grade-ring" style="border-color:${color};color:${color}">${SEV_EMOJI[sev]}</div>
@@ -404,14 +406,29 @@ function renderResults(data) {
       ${data.saved ? `<p class="saved-badge">✓ Saved to your history</p>` : ''}
     </div>
     <div class="results-body">
-      <h2 class="section-title">Findings</h2>
   `;
 
+  // ── Summary ──────────────────────────────────────────────
+  html += `
+    <div class="results-summary-card">
+      <p class="results-summary-text">${summary}</p>
+    </div>
+  `;
+
+  // ── Findings ─────────────────────────────────────────────
   if (data.findings.length === 0) {
     html += `<div class="no-findings"><span class="no-findings-icon">✓</span><p>No compensations detected — great movement quality!</p></div>`;
   } else {
+    html += `<h2 class="section-title">Findings &amp; Corrections</h2>`;
     for (const f of data.findings) {
       const c = SEV_COLOR[f.severity];
+      const rec = getRecommendationInfo(f.name);
+      const tipsHtml = rec
+        ? `<ul class="finding-tips">${rec.tips.map(t => `<li>${t}</li>`).join('')}</ul>`
+        : '';
+      const whatHtml = rec
+        ? `<p class="finding-what"><strong>What it means:</strong> ${rec.means}</p>`
+        : '';
       html += `
         <div class="finding-card" style="--border-color:${c}">
           <div class="finding-header">
@@ -419,19 +436,21 @@ function renderResults(data) {
             <span class="finding-name">${f.name}</span>
           </div>
           <p class="finding-desc">${f.description}</p>
-          ${f.metric_value != null ? `<p class="finding-metric">${f.metric_label}: <strong>${f.metric_value}</strong></p>` : ''}
+          ${whatHtml}
+          ${tipsHtml}
         </div>
       `;
     }
   }
 
+  // ── Biomechanical Measurements (collapsible) ──────────────
+  const NORMALIZED_FIELDS = new Set(['left_knee_frontal_angle', 'right_knee_frontal_angle', 'lateral_trunk_shift', 'head_forward_offset']);
+  let statsHtml = '';
   if (data.stats.length > 0) {
-    // Normalized (unitless) metrics — display without the degree symbol
-    const NORMALIZED_FIELDS = new Set(['left_knee_frontal_angle', 'right_knee_frontal_angle', 'lateral_trunk_shift', 'head_forward_offset']);
-    html += `<h2 class="section-title">Joint Angles</h2><div class="stats-grid">`;
+    statsHtml += `<div class="stats-grid" style="margin-bottom:20px">`;
     for (const s of data.stats) {
       const unit = NORMALIZED_FIELDS.has(s.field) ? '' : '°';
-      html += `
+      statsHtml += `
         <div class="stat-card">
           <div class="stat-name">${s.name}</div>
           <div class="stat-values">
@@ -442,21 +461,30 @@ function renderResults(data) {
         </div>
       `;
     }
-    html += `</div>`;
+    statsHtml += `</div>`;
   }
 
   html += `
-      <h2 class="section-title">Calibrate Thresholds</h2>
-      <div class="card" style="margin-bottom:20px">
-        <p class="calib-intro">
-          This recording captured your movement data as the <strong>optimal standard</strong>.
-          The table below suggests threshold values relative to your actual joint angles.
-          Adjust sensitivity and edit any value before applying.
-        </p>
-        <div id="calibration-panel"></div>
+    <details class="bio-details">
+      <summary class="bio-summary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Biomechanical Measurements
+        <svg class="bio-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </summary>
+      <div class="bio-body">
+        <p class="bio-intro">Raw joint angle data captured during the recording. Min/Mean/Max across all depth frames.</p>
+        ${statsHtml}
+        <div class="calib-section">
+          <p class="calib-intro">
+            Use your actual joint angles below to fine-tune detection thresholds for your body.
+          </p>
+          <div id="calibration-panel"></div>
+        </div>
       </div>
-    `;
+    </details>
+  `;
 
+  // ── Actions ───────────────────────────────────────────────
   html += `
       <div class="results-actions">
         <button class="btn-primary" id="again-btn">
