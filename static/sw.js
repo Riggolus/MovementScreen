@@ -16,10 +16,12 @@ const ASSETS = [
   '/static/icons/icon-512.png',
 ];
 
-// Install: cache all local assets
+// Install: cache all local assets (individual failures don't abort install)
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll(ASSETS))
+    caches.open(CACHE).then(cache =>
+      Promise.allSettled(ASSETS.map(url => cache.add(url)))
+    )
   );
   self.skipWaiting();
 });
