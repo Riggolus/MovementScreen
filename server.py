@@ -25,6 +25,16 @@ async def index():
     return FileResponse(str(_STATIC / "index.html"))
 
 
+@app.get("/manifest.json")
+async def manifest():
+    return FileResponse(str(_STATIC / "manifest.json"), media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    return FileResponse(str(_STATIC / "sw.js"), media_type="application/javascript")
+
+
 @app.get("/{full_path:path}")
 async def spa_fallback(full_path: str):
     return FileResponse(str(_STATIC / "index.html"))
