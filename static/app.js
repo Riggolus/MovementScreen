@@ -6,6 +6,26 @@ import {
   DrawingUtils,
 } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs';
 
+import { computeJointAngles } from './analysis/joint_angles.js';
+import { createAggregator }   from './analysis/aggregator.js';
+import {
+  acceptFrameSquat,
+  acceptFrameLunge,
+  acceptFrameOverhead,
+} from './analysis/screens.js';
+import {
+  getThresholds,
+  saveThresholdOverrides,
+  clearThresholdOverride,
+  DEFAULT_THRESHOLDS,
+  THRESHOLD_DESCRIPTIONS,
+} from './analysis/thresholds.js';
+import {
+  saveAssessment,
+  getAssessments,
+  getAssessment,
+} from './db/local_db.js';
+
 // ── MediaPipe ────────────────────────────────────────────
 let poseLandmarker = null;
 let drawingUtils   = null;
@@ -29,62 +49,6 @@ async function initPoseLandmarker() {
 initPoseLandmarker().catch(() => {});
 
 // ── Auth state ───────────────────────────────────────────
-let authUser  = null;
-let authToken = null;
-
-function loadAuth() {
-  authToken = localStorage.getItem('ms_token');
-  const raw = localStorage.getItem('ms_user');
-  authUser  = raw ? JSON.parse(raw) : null;
-}
-
-function saveAuth(data) {
-  authToken = data.access_token;
-  authUser  = data.user;
-  localStorage.setItem('ms_token',         data.access_token);
-  localStorage.setItem('ms_refresh_token', data.refresh_token);
-  localStorage.setItem('ms_user',          JSON.stringify(data.user));
-}
-
-function clearAuth() {
-  authToken = null;
-  authUser  = null;
-  localStorage.removeItem('ms_token');
-  localStorage.removeItem('ms_refresh_token');
-  localStorage.removeItem('ms_user');
-}
-
-async function authFetch(url, opts = {}) {
-  const headers = { ...(opts.headers || {}) };
-  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-
-  let res = await fetch(url, { ...opts, headers });
-
-  // Try refreshing once on 401
-  if (res.status === 401) {
-    const rt = localStorage.getItem('ms_refresh_token');
-    if (rt) {
-      const rRes = await fetch('/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: rt }),
-      });
-      if (rRes.ok) {
-        const rData = await rRes.json();
-        authToken = rData.access_token;
-        localStorage.setItem('ms_token', authToken);
-        headers['Authorization'] = `Bearer ${authToken}`;
-        res = await fetch(url, { ...opts, headers });
-      } else {
-        clearAuth();
-        updateHeader();
-        showView('auth');
-        throw new Error('Session expired. Please log in again.');
-      }
-    }
-  }
-  return res;
-}
 
 // ── App state ─────────────────────────────────────────────
 let currentScreen  = 'squat';
@@ -92,8 +56,8 @@ let currentSide    = 'left';
 let currentAngle   = 'anterior';
 let facingMode     = 'environment';
 let mediaStream    = null;
-let mediaRecorder  = null;
-let recordedChunks = [];
+let isRecording    = false;
+let aggregator     = null;
 let timerInterval  = null;
 let secondsElapsed = 0;
 
@@ -124,10 +88,6 @@ function showView(name) {
 }
 
 function updateHeader() {
-  if (!authUser) {
-    headerNav.innerHTML = '';
-    return;
-  }
   headerNav.innerHTML = `
     <button class="nav-btn" id="nav-home-btn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -137,96 +97,15 @@ function updateHeader() {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       History
     </button>
-    ${authUser.is_admin ? `
     <button class="nav-btn" id="nav-admin-btn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
       Thresholds
-    </button>` : ''}
-    <span class="user-chip">${authUser.name.split(' ')[0]}</span>
-    <button class="nav-btn danger" id="nav-logout-btn">Log out</button>
+    </button>
   `;
   document.getElementById('nav-home-btn').addEventListener('click', () => showView('setup'));
   document.getElementById('nav-history-btn').addEventListener('click', loadHistory);
-  document.getElementById('nav-logout-btn').addEventListener('click', logout);
-  document.getElementById('nav-admin-btn')?.addEventListener('click', loadAdminPage);
+  document.getElementById('nav-admin-btn').addEventListener('click', loadAdminPage);
 }
-
-function logout() {
-  clearAuth();
-  updateHeader();
-  showView('auth');
-}
-
-// ── Auth forms ────────────────────────────────────────────
-document.querySelectorAll('.auth-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    const isLogin = tab.dataset.tab === 'login';
-    document.getElementById('login-form').classList.toggle('hidden', !isLogin);
-    document.getElementById('register-form').classList.toggle('hidden', isLogin);
-  });
-});
-
-document.getElementById('login-form').addEventListener('submit', async e => {
-  e.preventDefault();
-  const btn = e.target.querySelector('button[type=submit]');
-  const err = document.getElementById('login-error');
-  err.classList.add('hidden');
-  btn.disabled = true;
-  btn.textContent = 'Logging in…';
-  try {
-    const fd = new FormData(e.target);
-    const res = await fetch('/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: fd.get('email'), password: fd.get('password') }),
-    });
-    if (!res.ok) {
-      const d = await res.json();
-      throw new Error(d.detail || 'Login failed.');
-    }
-    saveAuth(await res.json());
-    updateHeader();
-    showView('setup');
-  } catch (ex) {
-    err.textContent = ex.message;
-    err.classList.remove('hidden');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Log in';
-  }
-});
-
-document.getElementById('register-form').addEventListener('submit', async e => {
-  e.preventDefault();
-  const btn = e.target.querySelector('button[type=submit]');
-  const err = document.getElementById('register-error');
-  err.classList.add('hidden');
-  btn.disabled = true;
-  btn.textContent = 'Creating account…';
-  try {
-    const fd = new FormData(e.target);
-    const res = await fetch('/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: fd.get('name'), email: fd.get('email'), password: fd.get('password') }),
-    });
-    if (!res.ok) {
-      const d = await res.json();
-      throw new Error(d.detail || 'Registration failed.');
-    }
-    saveAuth(await res.json());
-    updateHeader();
-    showView('setup');
-  } catch (ex) {
-    err.textContent = ex.message;
-    err.classList.remove('hidden');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Create account';
-  }
-});
 
 // ── Assessment instructions ───────────────────────────────
 const SCREEN_INSTRUCTIONS = {
@@ -366,17 +245,14 @@ async function startRecording() {
     startSkeletonLoop();
   }
 
-  const mimeType = getSupportedMimeType();
-  mediaRecorder  = new MediaRecorder(mediaStream, mimeType ? { mimeType } : {});
-  recordedChunks = [];
-  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-  mediaRecorder.onstop = uploadAndAnalyse;
+  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Forward Lunge', overhead: 'Overhead Reach' };
+  aggregator = createAggregator(SCREEN_NAMES[currentScreen] || currentScreen);
 
   // Countdown — user can see themselves and get into position
   const started = await runCountdown();
   if (!started) return; // cancelled during countdown
 
-  mediaRecorder.start(100);
+  isRecording = true;
   startTimer();
 }
 
@@ -405,6 +281,13 @@ function startSkeletonLoop() {
           });
           poseStatus.textContent = 'Pose detected';
           poseStatus.classList.add('detected');
+          if (isRecording && aggregator) {
+            let atDepth = false;
+            if (currentScreen === 'squat')         atDepth = acceptFrameSquat(lms, currentAngle);
+            else if (currentScreen === 'lunge')    atDepth = acceptFrameLunge(lms, currentAngle, currentSide);
+            else if (currentScreen === 'overhead') atDepth = acceptFrameOverhead(lms);
+            if (atDepth) aggregator.addFrame(computeJointAngles(lms));
+          }
         } else {
           poseStatus.textContent = 'Waiting for pose…';
           poseStatus.classList.remove('detected');
@@ -425,16 +308,17 @@ document.getElementById('stop-btn').addEventListener('click', stopRecording);
 
 function stopRecording() {
   stopTimer(); stopSkeletonLoop();
-  mediaRecorder.stop();
+  isRecording = false;
   mediaStream.getTracks().forEach(t => t.stop());
   showView('processing');
+  analyseLocally();
 }
 
 document.getElementById('cancel-btn').addEventListener('click', () => {
-  countdownActive = false; // abort countdown if running
+  countdownActive = false;
   document.getElementById('countdown-overlay').classList.add('hidden');
   stopTimer(); stopSkeletonLoop();
-  if (mediaRecorder?.state !== 'inactive') mediaRecorder.stop();
+  isRecording = false;
   mediaStream?.getTracks().forEach(t => t.stop());
   showView('setup');
 });
@@ -451,12 +335,6 @@ document.getElementById('flip-btn').addEventListener('click', async () => {
     const mirrored = facingMode === 'user';
     preview.style.transform        = mirrored ? 'scaleX(-1)' : '';
     skeletonCanvas.style.transform = mirrored ? 'scaleX(-1)' : '';
-    if (mediaRecorder?.state !== 'inactive') mediaRecorder.stop();
-    const mt = getSupportedMimeType();
-    mediaRecorder = new MediaRecorder(mediaStream, mt ? { mimeType: mt } : {});
-    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-    mediaRecorder.onstop = uploadAndAnalyse;
-    mediaRecorder.start(100);
     if (poseLandmarker) startSkeletonLoop();
   } catch { /* keep current */ }
 });
@@ -472,27 +350,26 @@ function updateTimerDisplay() {
   timerEl.textContent = `${m}:${String(s).padStart(2, '0')}`;
 }
 
-// ── Upload & Analyse ──────────────────────────────────────
-async function uploadAndAnalyse() {
-  const mimeType = recordedChunks[0]?.type || 'video/webm';
-  const ext      = mimeType.includes('mp4') ? '.mp4' : '.webm';
-  const blob     = new Blob(recordedChunks, { type: mimeType });
-
-  const form = new FormData();
-  form.append('video',            blob, `recording${ext}`);
-  form.append('screen',           currentScreen);
-  form.append('lead_side',        currentSide);
-  form.append('camera_angle',     currentAngle);
-  form.append('model_complexity', '1');
-
+// ── Local analysis + sync ─────────────────────────────────
+async function analyseLocally() {
+  if (!aggregator) { showError('No recording data found. Please try again.'); return; }
   try {
-    const res = await authFetch('/analyse', { method: 'POST', body: form });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || `Server error ${res.status}`);
-    }
-    renderResults(await res.json());
+    const result = aggregator.finalize(currentAngle, currentScreen, getThresholds());
+    const record = {
+      ...result,
+      lead_side:   currentSide,
+      recorded_at: new Date().toISOString(),
+      synced:      false,
+      server_id:   null,
+    };
+
+    const localId = await saveAssessment(record);
+    result.recorded_at = record.recorded_at;
+    result.saved = true;
+
+    renderResults(result);
     showView('results');
+
   } catch (err) {
     showError(err.message);
   }
@@ -568,8 +445,7 @@ function renderResults(data) {
     html += `</div>`;
   }
 
-  if (authUser?.is_admin) {
-    html += `
+  html += `
       <h2 class="section-title">Calibrate Thresholds</h2>
       <div class="card" style="margin-bottom:20px">
         <p class="calib-intro">
@@ -580,7 +456,6 @@ function renderResults(data) {
         <div id="calibration-panel"></div>
       </div>
     `;
-  }
 
   html += `
       <div class="results-actions">
@@ -592,7 +467,7 @@ function renderResults(data) {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           View Report
         </button>
-        ${authUser ? `<button class="btn-primary" id="history-from-results-btn" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);box-shadow:none;">History</button>` : ''}
+        <button class="btn-primary" id="history-from-results-btn" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);box-shadow:none;">History</button>
       </div>
     </div>
   `;
@@ -601,8 +476,8 @@ function renderResults(data) {
   views.results.scrollTop = 0;
   document.getElementById('again-btn').addEventListener('click', resetApp);
   document.getElementById('report-from-results-btn').addEventListener('click', () => renderReport(data, 'results'));
-  document.getElementById('history-from-results-btn')?.addEventListener('click', loadHistory);
-  if (authUser?.is_admin) renderCalibrationPanel(data);
+  document.getElementById('history-from-results-btn').addEventListener('click', loadHistory);
+  renderCalibrationPanel(data);
 }
 
 // ── History / Progress ────────────────────────────────────
@@ -614,13 +489,18 @@ async function loadHistory() {
   views.history.innerHTML = `<div class="processing-content"><div class="spinner-ring"></div></div>`;
 
   try {
-    const [aRes, pRes] = await Promise.all([
-      authFetch('/assessments'),
-      authFetch('/progress'),
-    ]);
-    const { assessments } = await aRes.json();
-    const { by_screen }   = await pRes.json();
+    const assessments = await getAssessments(50);
+
+    // Build by_screen progress (oldest-first for the trend chart)
+    const by_screen = { squat: [], lunge: [], overhead: [] };
+    for (const a of [...assessments].reverse()) {
+      if (by_screen[a.screen_type]) {
+        by_screen[a.screen_type].push({ recorded_at: a.recorded_at, worst_severity: a.worst_severity });
+      }
+    }
+
     renderHistory(assessments, by_screen);
+
   } catch (err) {
     views.history.innerHTML = `<div class="error-content"><div class="error-icon">⚠</div><p>${err.message}</p></div>`;
   }
@@ -715,8 +595,11 @@ async function toggleAssessmentDetail(id) {
   body.classList.add('open');
 
   try {
-    const res = await authFetch(`/assessments/${id}`);
-    const data = await res.json();
+    const data = await getAssessment(parseInt(id, 10));
+    if (!data) {
+      body.innerHTML = `<p style="padding:16px;color:var(--text-3);font-size:13px">Assessment not found.</p>`;
+      return;
+    }
     let inner = '';
     if (data.findings.length === 0) {
       inner = `<div class="no-findings" style="margin-top:10px"><span class="no-findings-icon" style="font-size:24px">✓</span><p>No compensations detected.</p></div>`;
@@ -755,8 +638,8 @@ function drawTrendChart(container, byScreen) {
   const W   = container.clientWidth || 320;
   const H   = 160;
   const PAD = { top: 12, right: 16, bottom: 28, left: 44 };
-  const SEV_NUM = { none: 0, mild: 1, moderate: 2, severe: 3 };
-  const YLABELS = ['None', 'Mild', 'Mod', 'Severe'];
+  const SEV_NUM = { A: 0, B: 0.5, C: 1, D: 2, E: 2.5, F: 3, none: 0, mild: 1, moderate: 2, severe: 3 };
+  const YLABELS = ['Pass', 'Mild', 'Mod', 'Severe'];
 
   const allPoints = Object.values(byScreen).flat();
   if (!allPoints.length) return;
@@ -806,134 +689,156 @@ function showError(msg) {
 }
 
 // ── Reset ─────────────────────────────────────────────────
-function resetApp() { recordedChunks = []; showView('setup'); }
-
-// ── Mime helper ───────────────────────────────────────────
-function getSupportedMimeType() {
-  return ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4']
-    .find(t => MediaRecorder.isTypeSupported(t)) || '';
-}
+function resetApp() { aggregator = null; isRecording = false; showView('setup'); }
 
 // ── Admin threshold page ──────────────────────────────────
 
 const THRESHOLD_GROUPS = [
   {
-    label: 'Knee Valgus', tests: ['squat', 'lunge'], unit: '°', step: 0.5, precision: 1,
-    note: '180° = perfect frontal alignment. Lower angle = more inward knee collapse. Mild ≈ 3° inward, Moderate ≈ 7°, Severe ≈ 15°.',
+    label: 'Knee Valgus', tests: ['squat', 'lunge'], unit: 'norm', step: 0.01, precision: 2,
+    note: 'Medial deviation of knee from hip-ankle line, normalised by hip width. Higher = worse valgus.',
     keys: [
-      { key: 'knee_valgus_mild',     label: 'Mild trigger' },
-      { key: 'knee_valgus_moderate', label: 'Moderate trigger' },
-      { key: 'knee_valgus_severe',   label: 'Severe trigger' },
+      { key: 'knee_valgus_b', label: 'Grade B trigger' },
+      { key: 'knee_valgus_c', label: 'Grade C trigger' },
+      { key: 'knee_valgus_d', label: 'Grade D trigger' },
+      { key: 'knee_valgus_e', label: 'Grade E trigger' },
+      { key: 'knee_valgus_f', label: 'Grade F trigger' },
     ],
   },
   {
     label: 'Forward Trunk Lean', tests: ['squat', 'lunge', 'overhead'], unit: '°', step: 1, precision: 1,
     keys: [
-      { key: 'trunk_lean_mild',     label: 'Mild trigger' },
-      { key: 'trunk_lean_moderate', label: 'Moderate trigger' },
-      { key: 'trunk_lean_severe',   label: 'Severe trigger' },
+      { key: 'trunk_lean_b', label: 'Grade B trigger' },
+      { key: 'trunk_lean_c', label: 'Grade C trigger' },
+      { key: 'trunk_lean_d', label: 'Grade D trigger' },
+      { key: 'trunk_lean_e', label: 'Grade E trigger' },
+      { key: 'trunk_lean_f', label: 'Grade F trigger' },
     ],
   },
   {
     label: 'Lateral Trunk Shift', tests: ['squat', 'lunge', 'overhead'], unit: 'norm', step: 0.005, precision: 3,
     note: 'Normalised image coordinate offset (0–1 range).',
     keys: [
-      { key: 'lateral_shift_mild',     label: 'Mild trigger' },
-      { key: 'lateral_shift_moderate', label: 'Moderate trigger' },
-      { key: 'lateral_shift_severe',   label: 'Severe trigger' },
+      { key: 'lateral_shift_b', label: 'Grade B trigger' },
+      { key: 'lateral_shift_c', label: 'Grade C trigger' },
+      { key: 'lateral_shift_d', label: 'Grade D trigger' },
+      { key: 'lateral_shift_e', label: 'Grade E trigger' },
+      { key: 'lateral_shift_f', label: 'Grade F trigger' },
     ],
   },
   {
     label: 'Lateral Spinal Flexion', tests: ['squat', 'lunge', 'overhead'], unit: '°', step: 0.5, precision: 1,
     keys: [
-      { key: 'lateral_flexion_mild',     label: 'Mild trigger' },
-      { key: 'lateral_flexion_moderate', label: 'Moderate trigger' },
-      { key: 'lateral_flexion_severe',   label: 'Severe trigger' },
+      { key: 'lateral_flexion_b', label: 'Grade B trigger' },
+      { key: 'lateral_flexion_c', label: 'Grade C trigger' },
+      { key: 'lateral_flexion_d', label: 'Grade D trigger' },
+      { key: 'lateral_flexion_e', label: 'Grade E trigger' },
+      { key: 'lateral_flexion_f', label: 'Grade F trigger' },
     ],
   },
   {
     label: 'Spinal Curvature', tests: ['squat', 'lunge', 'overhead'], unit: '°', step: 0.5, precision: 1,
     note: 'Deviation from 180° (straight spine). Higher = more curvature required to flag.',
     keys: [
-      { key: 'spine_curve_mild',     label: 'Mild trigger' },
-      { key: 'spine_curve_moderate', label: 'Moderate trigger' },
-      { key: 'spine_curve_severe',   label: 'Severe trigger' },
+      { key: 'spine_curve_b', label: 'Grade B trigger' },
+      { key: 'spine_curve_c', label: 'Grade C trigger' },
+      { key: 'spine_curve_d', label: 'Grade D trigger' },
+      { key: 'spine_curve_e', label: 'Grade E trigger' },
+      { key: 'spine_curve_f', label: 'Grade F trigger' },
     ],
   },
   {
     label: 'Ankle / Heel Rise', tests: ['squat', 'lunge'], unit: '°', step: 1, precision: 1,
     note: 'Lower angle = more restricted dorsiflexion. Lower threshold = more sensitive.',
     keys: [
-      { key: 'ankle_df_mild',     label: 'Mild trigger' },
-      { key: 'ankle_df_moderate', label: 'Moderate trigger' },
+      { key: 'ankle_df_b', label: 'Grade B trigger' },
+      { key: 'ankle_df_c', label: 'Grade C trigger' },
+      { key: 'ankle_df_d', label: 'Grade D trigger' },
+      { key: 'ankle_df_e', label: 'Grade E trigger' },
+      { key: 'ankle_df_f', label: 'Grade F trigger' },
     ],
   },
   {
     label: 'Bilateral Symmetry', tests: ['squat', 'lunge', 'overhead'], unit: 'ratio', step: 0.01, precision: 2,
     note: 'Asymmetry ratio 0–1 where 0 = perfect symmetry.',
     keys: [
-      { key: 'asymmetry_mild',     label: 'Mild trigger' },
-      { key: 'asymmetry_moderate', label: 'Moderate trigger' },
-      { key: 'asymmetry_severe',   label: 'Severe trigger' },
+      { key: 'asymmetry_b', label: 'Grade B trigger' },
+      { key: 'asymmetry_c', label: 'Grade C trigger' },
+      { key: 'asymmetry_d', label: 'Grade D trigger' },
+      { key: 'asymmetry_e', label: 'Grade E trigger' },
+      { key: 'asymmetry_f', label: 'Grade F trigger' },
     ],
   },
   {
     label: 'Upper Trunk Flexion', tests: ['lateral'], unit: '°', step: 1, precision: 1,
     note: 'Lateral view only. Ear→shoulder segment angle from vertical.',
     keys: [
-      { key: 'upper_trunk_mild',     label: 'Mild trigger' },
-      { key: 'upper_trunk_moderate', label: 'Moderate trigger' },
-      { key: 'upper_trunk_severe',   label: 'Severe trigger' },
+      { key: 'upper_trunk_b', label: 'Grade B trigger' },
+      { key: 'upper_trunk_c', label: 'Grade C trigger' },
+      { key: 'upper_trunk_d', label: 'Grade D trigger' },
+      { key: 'upper_trunk_e', label: 'Grade E trigger' },
+      { key: 'upper_trunk_f', label: 'Grade F trigger' },
     ],
   },
   {
     label: 'Head Forward Posture', tests: ['lateral'], unit: 'norm', step: 0.005, precision: 3,
     note: 'Lateral view only. Normalised horizontal ear-to-shoulder offset.',
     keys: [
-      { key: 'head_forward_mild',     label: 'Mild trigger' },
-      { key: 'head_forward_moderate', label: 'Moderate trigger' },
-      { key: 'head_forward_severe',   label: 'Severe trigger' },
+      { key: 'head_forward_b', label: 'Grade B trigger' },
+      { key: 'head_forward_c', label: 'Grade C trigger' },
+      { key: 'head_forward_d', label: 'Grade D trigger' },
+      { key: 'head_forward_e', label: 'Grade E trigger' },
+      { key: 'head_forward_f', label: 'Grade F trigger' },
     ],
   },
   {
     label: 'Squat — Trunk Lean', tests: ['squat'], unit: '°', step: 1, precision: 1,
     note: 'Squat-specific thresholds only. Optimal squat trunk lean is 20–40°, so triggering below 45° would flag normal technique.',
     keys: [
-      { key: 'squat_trunk_lean_mild',     label: 'Mild trigger' },
-      { key: 'squat_trunk_lean_moderate', label: 'Moderate trigger' },
-      { key: 'squat_trunk_lean_severe',   label: 'Severe trigger' },
+      { key: 'squat_trunk_lean_b', label: 'Grade B trigger' },
+      { key: 'squat_trunk_lean_c', label: 'Grade C trigger' },
+      { key: 'squat_trunk_lean_d', label: 'Grade D trigger' },
+      { key: 'squat_trunk_lean_e', label: 'Grade E trigger' },
+      { key: 'squat_trunk_lean_f', label: 'Grade F trigger' },
     ],
   },
   {
     label: 'Dorsiflexion — Tibial Angle', tests: ['squat', 'lunge', 'lateral'], unit: '°', step: 0.5, precision: 1,
     note: 'Lateral view only. Angle of tibia from vertical at squat depth. Optimal: 30–40°. Lower threshold = more restricted ankle.',
     keys: [
-      { key: 'tibial_angle_restricted_mild',   label: 'Mild restriction trigger (lower is worse)' },
-      { key: 'tibial_angle_restricted_severe', label: 'Severe restriction trigger (lower is worse)' },
+      { key: 'tibial_angle_b', label: 'Grade B trigger (lower is worse)' },
+      { key: 'tibial_angle_c', label: 'Grade C trigger (lower is worse)' },
+      { key: 'tibial_angle_d', label: 'Grade D trigger (lower is worse)' },
+      { key: 'tibial_angle_e', label: 'Grade E trigger (lower is worse)' },
+      { key: 'tibial_angle_f', label: 'Grade F trigger (lower is worse)' },
     ],
   },
   {
     label: 'Pelvic Tilt', tests: ['squat', 'lunge', 'overhead'], unit: '°', step: 0.5, precision: 1,
     note: 'Anterior view. Angle of hip line from horizontal. Even small tilts can indicate hip weakness.',
     keys: [
-      { key: 'pelvic_tilt_mild',     label: 'Mild trigger' },
-      { key: 'pelvic_tilt_moderate', label: 'Moderate trigger' },
-      { key: 'pelvic_tilt_severe',   label: 'Severe trigger' },
+      { key: 'pelvic_tilt_b', label: 'Grade B trigger' },
+      { key: 'pelvic_tilt_c', label: 'Grade C trigger' },
+      { key: 'pelvic_tilt_d', label: 'Grade D trigger' },
+      { key: 'pelvic_tilt_e', label: 'Grade E trigger' },
+      { key: 'pelvic_tilt_f', label: 'Grade F trigger' },
     ],
   },
 ];
 
-async function loadAdminPage() {
+function loadAdminPage() {
   showView('admin');
-  views.admin.innerHTML = `<div class="processing-content"><div class="spinner-ring"></div></div>`;
-  try {
-    const res = await authFetch('/admin/thresholds');
-    if (res.status === 403) { views.admin.innerHTML = `<div class="error-content"><div class="error-icon">⚠</div><p>Admin access required.</p></div>`; return; }
-    if (!res.ok) throw new Error('Failed to load thresholds.');
-    renderAdminPage(await res.json());
-  } catch (err) {
-    views.admin.innerHTML = `<div class="error-content"><div class="error-icon">⚠</div><p>${err.message}</p></div>`;
+  const current = getThresholds();
+  const thresholds = {};
+  for (const key of Object.keys(DEFAULT_THRESHOLDS)) {
+    thresholds[key] = {
+      value:        current[key],
+      default:      DEFAULT_THRESHOLDS[key],
+      is_overridden: current[key] !== DEFAULT_THRESHOLDS[key],
+      description:  THRESHOLD_DESCRIPTIONS[key] ?? key,
+    };
   }
+  renderAdminPage({ thresholds });
 }
 
 function renderAdminPage(data) {
@@ -1017,7 +922,7 @@ views.admin.addEventListener('input', e => {
   saveBtn.disabled = !changed || isNaN(parseFloat(e.target.value));
 });
 
-views.admin.addEventListener('click', async e => {
+views.admin.addEventListener('click', e => {
   if (e.target.matches('.filter-tab')) {
     document.querySelectorAll('.filter-tab').forEach(t => t.classList.toggle('active', t === e.target));
     const filter = e.target.dataset.filter;
@@ -1026,26 +931,19 @@ views.admin.addEventListener('click', async e => {
     });
     return;
   }
-  if (e.target.matches('.threshold-save-btn')) { await saveThreshold(e.target.closest('.threshold-row')); return; }
-  if (e.target.matches('.threshold-reset-btn')) { await resetThreshold(e.target.closest('.threshold-row')); }
+  if (e.target.matches('.threshold-save-btn')) { saveThreshold(e.target.closest('.threshold-row')); return; }
+  if (e.target.matches('.threshold-reset-btn')) { resetThreshold(e.target.closest('.threshold-row')); }
 });
 
-async function saveThreshold(row) {
+function saveThreshold(row) {
   const key     = row.dataset.key;
   const input   = row.querySelector('.threshold-input');
   const saveBtn = row.querySelector('.threshold-save-btn');
   const value   = parseFloat(input.value);
   if (isNaN(value)) return;
 
-  saveBtn.disabled = true;
-  saveBtn.textContent = '…';
   try {
-    const res = await authFetch('/admin/thresholds', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updates: { [key]: value } }),
-    });
-    if (!res.ok) throw new Error();
+    saveThresholdOverrides({ [key]: value });
     input.dataset.original = value;
     row.querySelector('.threshold-modified').classList.remove('hidden');
     row.querySelector('.threshold-reset-btn').classList.remove('hidden');
@@ -1053,21 +951,18 @@ async function saveThreshold(row) {
   } catch {
     showToast('Failed to save', 'error');
   } finally {
-    saveBtn.textContent = 'Save';
     saveBtn.disabled = parseFloat(input.value) === parseFloat(input.dataset.original);
   }
 }
 
-async function resetThreshold(row) {
+function resetThreshold(row) {
   const key      = row.dataset.key;
   const input    = row.querySelector('.threshold-input');
   const resetBtn = row.querySelector('.threshold-reset-btn');
   const defVal   = parseFloat(row.dataset.default);
 
-  resetBtn.disabled = true;
   try {
-    const res = await authFetch(`/admin/thresholds/${key}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error();
+    clearThresholdOverride(key);
     input.value = defVal;
     input.dataset.original = defVal;
     row.querySelector('.threshold-modified').classList.add('hidden');
@@ -1076,8 +971,6 @@ async function resetThreshold(row) {
     showToast('Reset to default');
   } catch {
     showToast('Failed to reset', 'error');
-  } finally {
-    resetBtn.disabled = false;
   }
 }
 
@@ -1189,13 +1082,12 @@ function renderCalibrationPanel(data) {
   if (!container) return;
 
   let sensitivity = 'normal';
+  // Build currentThresholds in the same shape renderAdminPage expects
+  const _current = getThresholds();
   let currentThresholds = {};
-
-  // Pre-load current values so we can show them alongside suggestions
-  authFetch('/admin/thresholds')
-    .then(r => r.json())
-    .then(({ thresholds }) => { currentThresholds = thresholds; drawPanel(); })
-    .catch(() => drawPanel());
+  for (const key of Object.keys(DEFAULT_THRESHOLDS)) {
+    currentThresholds[key] = { value: _current[key], default: DEFAULT_THRESHOLDS[key] };
+  }
 
   function fmt(v) {
     if (v == null) return '—';
@@ -1245,39 +1137,33 @@ function renderCalibrationPanel(data) {
       btn.addEventListener('click', () => { sensitivity = btn.dataset.sens; drawPanel(); })
     );
 
-    document.getElementById('apply-calib-btn').addEventListener('click', async () => {
+    document.getElementById('apply-calib-btn').addEventListener('click', () => {
       const updates = {};
       container.querySelectorAll('.calib-input').forEach(inp => {
         const v = parseFloat(inp.value);
         if (!isNaN(v)) updates[inp.dataset.key] = v;
       });
       const btn = document.getElementById('apply-calib-btn');
-      btn.disabled = true; btn.textContent = 'Applying…';
       try {
-        const res = await authFetch('/admin/thresholds', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ updates }),
+        saveThresholdOverrides(updates);
+        // Refresh currentThresholds and re-render current column
+        const refreshed = getThresholds();
+        for (const key of Object.keys(DEFAULT_THRESHOLDS)) {
+          currentThresholds[key] = { value: refreshed[key], default: DEFAULT_THRESHOLDS[key] };
+        }
+        container.querySelectorAll('.calib-current').forEach((td, i) => {
+          const key = suggestions[i]?.key;
+          if (key && currentThresholds[key]) td.textContent = fmt(currentThresholds[key].value);
         });
-        if (!res.ok) throw new Error();
         showToast('Thresholds calibrated from recording');
         btn.textContent = `✓ Applied`;
-        // Refresh current column
-        currentThresholds = {};
-        authFetch('/admin/thresholds').then(r => r.json()).then(({ thresholds }) => {
-          currentThresholds = thresholds;
-          container.querySelectorAll('.calib-current').forEach((td, i) => {
-            const key = suggestions[i]?.key;
-            if (key && thresholds[key]) td.textContent = fmt(thresholds[key].value);
-          });
-        }).catch(() => {});
       } catch {
         showToast('Failed to apply', 'error');
-        btn.disabled = false;
-        btn.textContent = `Apply ${Object.keys(updates).length} Threshold Updates`;
       }
     });
   }
+
+  drawPanel();
 }
 
 // ── Report ───────────────────────────────────────────────
@@ -1402,11 +1288,11 @@ function generateSummary(data) {
   const count = data.findings.length;
   const screenName = data.screen_name || 'movement screen';
 
-  if (sev === 'none') {
+  if (sev === 'A' || sev === 'none') {
     return `Your ${screenName} showed no significant compensation patterns. Your movement quality looks great — keep up the good work and continue monitoring over time.`;
   }
 
-  const sevText = { mild: 'minor', moderate: 'moderate', severe: 'notable' }[sev] || sev;
+  const sevText = { B: 'minimal', C: 'minor', D: 'moderate', E: 'significant', F: 'notable', mild: 'minor', moderate: 'moderate', severe: 'notable' }[sev] || sev;
   const findingNames = data.findings.map(f => f.name.replace(/ \(.*\)$/, '')).filter((v, i, a) => a.indexOf(v) === i);
   const listText = findingNames.length <= 2
     ? findingNames.join(' and ')
@@ -1418,9 +1304,19 @@ function generateSummary(data) {
 function renderReport(data, source) {
   const sev   = data.worst_severity;
   const color = SEV_COLOR[sev];
-  const icon  = { none: '✓', mild: '~', moderate: '!', severe: '▲' }[sev] ?? '?';
-  const grade = { none: 'Excellent', mild: 'Good — minor notes', moderate: 'Fair — attention needed', severe: 'Needs improvement' }[sev] ?? sev;
+  const icon = { A: '✓', B: '~', C: '~', D: '!', E: '▲', F: '▲', none: '✓', mild: '~', moderate: '!', severe: '▲' }[sev] ?? '?';
+  const grade = {
+    A: 'Excellent', B: 'Good — minimal notes', C: 'Good — minor notes',
+    D: 'Fair — attention needed', E: 'Fair — significant concerns', F: 'Needs improvement',
+    none: 'Excellent', mild: 'Good — minor notes', moderate: 'Fair — attention needed', severe: 'Needs improvement',
+  }[sev] ?? sev;
   const gradeDesc = {
+    A: 'No significant compensations detected.',
+    B: 'Minimal compensations detected — keep monitoring.',
+    C: 'Small compensations present — address in your routine.',
+    D: 'Moderate compensations found — prioritise the recommendations below.',
+    E: 'Significant compensations found — prioritise the recommendations below.',
+    F: 'Significant compensations found — consider professional guidance.',
     none: 'No significant compensations detected.',
     mild: 'Small compensations present — address in your routine.',
     moderate: 'Moderate compensations found — prioritise the recommendations below.',
@@ -1534,23 +1430,5 @@ function renderReport(data, source) {
 }
 
 // ── Boot ─────────────────────────────────────────────────
-loadAuth();
 updateHeader();
-if (authUser && authToken) {
-  // Validate token and refresh authUser (picks up is_admin changes)
-  fetch('/auth/me', { headers: { Authorization: `Bearer ${authToken}` } })
-    .then(async r => {
-      if (r.ok) {
-        const fresh = await r.json();
-        authUser = { ...authUser, ...fresh };
-        localStorage.setItem('ms_user', JSON.stringify(authUser));
-        updateHeader();
-        showView('setup');
-      } else {
-        clearAuth(); updateHeader(); showView('auth');
-      }
-    })
-    .catch(() => showView('setup'));
-} else {
-  showView('auth');
-}
+showView('setup');

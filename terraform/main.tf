@@ -7,13 +7,6 @@ terraform {
       version = "~> 1.3"
     }
   }
-
-  # Uncomment to store state remotely (recommended for teams / CI).
-  # backend "s3" {
-  #   bucket = "your-tf-state-bucket"
-  #   key    = "movementscreen/terraform.tfstate"
-  #   region = "us-east-1"
-  # }
 }
 
 provider "render" {
@@ -21,27 +14,10 @@ provider "render" {
   owner_id = var.render_owner_id
 }
 
-# ── PostgreSQL ────────────────────────────────────────────────────────────────
-#
-# Free plan: 256 MB RAM, 1 GB storage, deleted after 90 days.
-# Change db_plan to "basic_256mb" or higher for a persistent production database.
-
-resource "render_postgres" "db" {
-  name    = "${var.app_name}-db"
-  plan    = var.db_plan
-  region  = var.region
-  version = var.db_version
-}
-
 # ── Web service ───────────────────────────────────────────────────────────────
 #
-# Render builds the Docker image from the Dockerfile in your GitHub repo.
-# On each push to the configured branch Render will rebuild and redeploy
-# automatically (auto_deploy = true).
-#
-# Plan notes:
-#   - starter  ($7/mo)  512 MB RAM — minimum viable for MediaPipe + FastAPI
-#   - standard ($25/mo) 2 GB RAM   — recommended for production workloads
+# Free plan spins down after 15 min of inactivity (30-60 s cold start on
+# next request). Upgrade to "starter" ($7/mo) for always-on.
 
 resource "render_web_service" "web" {
   name   = var.app_name
@@ -58,23 +34,5 @@ resource "render_web_service" "web" {
     }
   }
 
-  # Health check — FastAPI returns 200 on GET /
   health_check_path = "/"
-
-  env_vars = {
-    # The internal connection string routes traffic within Render's private network
-    # (faster, no egress charges) — do not expose this URL publicly.
-    "DATABASE_URL" = {
-      value = render_postgres.db.connection_info.internal_connection_string
-    }
-
-    "JWT_SECRET" = {
-      value = var.jwt_secret
-    }
-
-    # Render injects $PORT automatically; this makes it explicit.
-    "PORT" = {
-      value = "10000"
-    }
-  }
 }
