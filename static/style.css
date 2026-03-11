@@ -667,6 +667,43 @@ body {
   .report-stats-table { break-inside: avoid; }
 }
 
+/* ── Mobile-first tweaks (< 480px) ─────────────────────── */
+@media (max-width: 480px) {
+  /* Nav: icons only, no text labels */
+  .nav-btn span { display: none; }
+  .nav-btn { padding: 8px 10px; gap: 0; }
+
+  /* Hero tighter on small screens */
+  .hero { padding: 20px 0 16px; }
+  .hero h1 { font-size: clamp(28px, 9vw, 40px); }
+  .hero p { font-size: 14px; }
+
+  /* Cards slightly less padding */
+  .card { padding: 16px 14px; }
+
+  /* Screen & angle selectors: tighter */
+  .screen-btn, .angle-btn { padding: 12px 6px; }
+  .screen-icon, .angle-icon { width: 36px; height: 36px; }
+  .screen-label, .angle-label { font-size: 12px; }
+
+  /* Stats: 2 columns max */
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Threshold rows: stack controls below label */
+  .threshold-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .threshold-controls { width: 100%; flex-wrap: wrap; }
+  .threshold-default { display: none; }
+
+  /* Recording controls more breathing room */
+  .recording-controls { padding: 16px 0 4px; }
+
+  /* Results actions stack naturally (already column) */
+  .results-actions { gap: 8px; }
+
+  /* History header */
+  .history-header h1 { font-size: 22px; }
+}
+
 /* ── Desktop ───────────────────────────────────────────── */
 @media (min-width: 600px) {
   .main { padding: 0 24px 60px; }
@@ -676,5 +713,4 @@ body {
   .screen-icon, .angle-icon { width: 48px; height: 48px; }
   .camera-wrap { aspect-ratio: 4/3; max-height: calc(100dvh - var(--header-h) - 160px); }
   .stats-grid { grid-template-columns: repeat(3, 1fr); }
-  .auth-wrap { padding: 48px 0; }
 }
