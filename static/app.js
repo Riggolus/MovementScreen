@@ -357,7 +357,7 @@ async function analyseLocally() {
     const result = aggregator.finalize(currentAngle, currentScreen, getThresholds());
     const record = {
       ...result,
-      lead_side:   currentSide,
+      lead_side:   currentScreen === 'lunge' ? currentSide : null,
       recorded_at: new Date().toISOString(),
       synced:      false,
       server_id:   null,
@@ -547,7 +547,7 @@ function renderHistory(assessments, byScreen) {
           <div class="assessment-card-header" data-id="${a.id}">
             <div class="assessment-screen-badge">${SCREEN_EMOJI[a.screen_type] ?? '📋'}</div>
             <div class="assessment-info">
-              <div class="assessment-title">${screenName}${a.lead_side ? ` (${a.lead_side})` : ''} · ${ANGLE_LABEL[a.camera_angle] ?? a.camera_angle}</div>
+              <div class="assessment-title">${screenName}${a.screen_type === 'lunge' && a.lead_side ? ` (${a.lead_side})` : ''} · ${ANGLE_LABEL[a.camera_angle] ?? a.camera_angle}</div>
               <div class="assessment-date">${date}</div>
             </div>
             <span class="assessment-sev-pill" style="background:${color}">${SEV_LABEL[a.worst_severity]}</span>
