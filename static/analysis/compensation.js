@@ -284,37 +284,6 @@ export function detectCompensations(
       }
     }
 
-    // 8. Ankle dorsiflexion — knee-ankle-foot proxy (secondary)
-    //    Only flag if tibial angle didn't already fire for the same side.
-    const tibialFlagged = new Set(
-      findings
-        .filter(f => f.name.includes('Restricted Dorsiflexion'))
-        .map(f => f.name.startsWith('Left') ? 'Left' : 'Right'),
-    );
-
-    for (const [side, df] of [
-      ['Left',  angles.leftAnkleDorsiflexion],
-      ['Right', angles.rightAnkleDorsiflexion],
-    ]) {
-      if (df != null && !tibialFlagged.has(side)) {
-        const sev = gradeFromThresholds(
-          df,
-          t.ankle_df_b, t.ankle_df_c, t.ankle_df_d,
-          t.ankle_df_e, t.ankle_df_f,
-          true,
-        );
-        if (sev !== 'A') {
-          findings.push({
-            name: `${side} Heel Rise / Limited Dorsiflexion`,
-            severity: sev,
-            description: `restricted ankle dorsiflexion on ${side.toLowerCase()} side`,
-            metricValue: Math.round(df * 10) / 10,
-            metricLabel: 'ankle angle (deg)',
-          });
-        }
-      }
-    }
-
     // 9. Head forward posture
     if (angles.headForwardOffset != null) {
       const offset = Math.abs(angles.headForwardOffset);

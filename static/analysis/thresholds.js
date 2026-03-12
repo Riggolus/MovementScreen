@@ -90,11 +90,13 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
   squat_trunk_lean_f: 65.0,
 
   // Tibial angle — lateral DF proxy; lower = more restricted (lower is worse)
-  tibial_angle_b: 35.0,
-  tibial_angle_c: 28.0,
-  tibial_angle_d: 23.0,
-  tibial_angle_e: 20.0,
-  tibial_angle_f: 18.0,
+  // Optimal forward tibial lean at squat depth: ≥ 30°.
+  // Grade B starts below the optimal floor so healthy squatters are not over-flagged.
+  tibial_angle_b: 30.0,
+  tibial_angle_c: 23.0,
+  tibial_angle_d: 18.0,
+  tibial_angle_e: 13.0,
+  tibial_angle_f: 10.0,
 
   // Pelvic tilt from horizontal — anterior view (higher is worse)
   // 2D landmark noise at typical resolutions is ~1-3°, so Grade B starts at 5°.
