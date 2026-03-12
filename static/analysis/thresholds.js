@@ -103,6 +103,30 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
   pelvic_tilt_d: 10.0,
   pelvic_tilt_e: 13.0,
   pelvic_tilt_f: 16.0,
+
+  // Gait — swing-phase knee angle (minimum = peak flexion; higher = stiff leg = worse)
+  // Normal peak swing knee flexion: ~60–80°. Higher value = knee not bending enough.
+  gait_swing_knee_b: 95.0,
+  gait_swing_knee_c: 110.0,
+  gait_swing_knee_d: 125.0,
+  gait_swing_knee_e: 140.0,
+  gait_swing_knee_f: 155.0,
+
+  // Gait — forward trunk lean during stance (higher = worse)
+  // Normal walking lean: ~5–8°.
+  gait_trunk_lean_b: 10.0,
+  gait_trunk_lean_c: 14.0,
+  gait_trunk_lean_d: 18.0,
+  gait_trunk_lean_e: 23.0,
+  gait_trunk_lean_f: 28.0,
+
+  // Gait — tibial angle at mid-stance (lower = more restricted = worse)
+  // Normal walking mid-stance tibial inclination: ~8–15°.
+  gait_tibial_b: 8.0,
+  gait_tibial_c: 5.0,
+  gait_tibial_d: 2.0,
+  gait_tibial_e: 0.0,
+  gait_tibial_f: -3.0,
 });
 
 // ---------------------------------------------------------------------------

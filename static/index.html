@@ -83,111 +83,107 @@
     <div id="view-setup" class="view">
       <div class="hero">
         <h1>Movement<br/>Analysis</h1>
-        <p>Record a movement to detect compensation patterns in real time.</p>
+        <p>Choose an assessment to get started.</p>
       </div>
 
-      <div class="card">
-        <h2 class="card-title">Choose a screen</h2>
-        <div class="screen-selector">
-          <button class="screen-btn active" data-screen="squat">
-            <span class="screen-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M12 6v6l-3 4M12 12l3 4M9 10h6"/></svg>
-            </span>
-            <span class="screen-label">Squat</span>
-            <span class="screen-desc">Bilateral squat depth + compensation</span>
-          </button>
-          <button class="screen-btn" data-screen="lunge">
-            <span class="screen-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M12 6v5l-4 5M12 11l4 5"/></svg>
-            </span>
-            <span class="screen-label">Lunge</span>
-            <span class="screen-desc">Single-leg forward lunge</span>
-          </button>
-          <button class="screen-btn" data-screen="overhead">
-            <span class="screen-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v5M7 9l5 3 5-3M7 4l-2-2M17 4l2-2"/></svg>
-            </span>
-            <span class="screen-label">Overhead</span>
-            <span class="screen-desc">Bilateral shoulder mobility</span>
-          </button>
+      <div class="screen-list">
+        <button class="screen-row active" data-screen="squat">
+          <span class="screen-row-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M12 6v6l-3 4M12 12l3 4M9 10h6"/></svg>
+          </span>
+          <div class="screen-row-info">
+            <span class="screen-row-name">Squat</span>
+            <span class="screen-row-desc">Bilateral depth &amp; compensation</span>
+          </div>
+          <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button class="screen-row" data-screen="lunge">
+          <span class="screen-row-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M12 6v5l-4 5M12 11l4 5"/></svg>
+          </span>
+          <div class="screen-row-info">
+            <span class="screen-row-name">Lunge</span>
+            <span class="screen-row-desc">Single-leg forward lunge</span>
+          </div>
+          <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button class="screen-row" data-screen="overhead">
+          <span class="screen-row-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v5M7 9l5 3 5-3M7 4l-2-2M17 4l2-2"/></svg>
+          </span>
+          <div class="screen-row-info">
+            <span class="screen-row-name">Overhead</span>
+            <span class="screen-row-desc">Bilateral shoulder mobility</span>
+          </div>
+          <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button class="screen-row" data-screen="gait">
+          <span class="screen-row-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M7 22l4-10 3 3 2-5"/><path d="M9 9l-2 4h5"/></svg>
+          </span>
+          <div class="screen-row-info">
+            <span class="screen-row-name">Gait</span>
+            <span class="screen-row-desc">Walk-past lateral gait screen</span>
+          </div>
+          <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+
+      <!-- Options panel — slides open when an assessment is selected -->
+      <div id="setup-options" class="setup-options open">
+
+        <div id="angle-option-group" class="option-group">
+          <p class="option-label">Camera angle</p>
+          <div class="angle-selector">
+            <button class="angle-btn active" data-angle="anterior">
+              <span class="angle-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a5 5 0 0 1 0 10M12 12c-5.33 0-8 2.67-8 4v2h16v-2c0-1.33-2.67-4-8-4z"/></svg>
+              </span>
+              <span class="angle-label">Anterior</span>
+              <span class="angle-desc">Face the camera</span>
+            </button>
+            <button class="angle-btn" data-angle="lateral">
+              <span class="angle-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h1"/></svg>
+              </span>
+              <span class="angle-label">Lateral</span>
+              <span class="angle-desc">Stand side-on</span>
+            </button>
+            <button class="angle-btn" data-angle="posterior">
+              <span class="angle-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </span>
+              <span class="angle-label">Posterior</span>
+              <span class="angle-desc">Back to camera</span>
+            </button>
+          </div>
         </div>
 
-        <div id="lunge-options" class="lunge-options hidden">
-          <span class="toggle-label">Lead leg</span>
+        <div id="lunge-options" class="option-group lunge-options hidden">
+          <p class="option-label">Lead leg</p>
           <div class="toggle-group">
             <button class="toggle-btn active" data-side="left">Left</button>
             <button class="toggle-btn" data-side="right">Right</button>
           </div>
         </div>
-      </div>
 
-      <div id="lateral-side-options" class="lateral-side-options card hidden">
-        <h2 class="card-title">Which side is closest to the camera?</h2>
-        <p class="lateral-side-desc">Only that leg's data will be used — the far leg is unreliable from a side-on view.</p>
-        <div class="toggle-group">
-          <button class="toggle-btn active" data-side="left">Left</button>
-          <button class="toggle-btn" data-side="right">Right</button>
+        <div id="lateral-side-options" class="option-group lateral-side-options hidden">
+          <p class="option-label">Near side</p>
+          <p class="lateral-side-desc">The leg closest to the camera — far-leg data is excluded.</p>
+          <div class="toggle-group">
+            <button class="toggle-btn active" data-side="left">Left</button>
+            <button class="toggle-btn" data-side="right">Right</button>
+          </div>
         </div>
+
+        <div id="instructions-card" class="option-instructions"></div>
+
+        <button id="start-btn" class="btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="white"/></svg>
+          Start Recording
+        </button>
+
       </div>
-
-      <div class="card">
-        <h2 class="card-title">Camera angle</h2>
-        <div class="angle-selector">
-          <button class="angle-btn active" data-angle="anterior">
-            <span class="angle-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a5 5 0 0 1 0 10M12 12c-5.33 0-8 2.67-8 4v2h16v-2c0-1.33-2.67-4-8-4z"/></svg>
-            </span>
-            <span class="angle-label">Anterior</span>
-            <span class="angle-desc">Face the camera</span>
-          </button>
-          <button class="angle-btn" data-angle="lateral">
-            <span class="angle-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h1"/></svg>
-            </span>
-            <span class="angle-label">Lateral</span>
-            <span class="angle-desc">Stand side-on</span>
-          </button>
-          <button class="angle-btn" data-angle="posterior">
-            <span class="angle-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            </span>
-            <span class="angle-label">Posterior</span>
-            <span class="angle-desc">Back to camera</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- ── Instructions (populated by JS) ──────────────── -->
-      <div id="instructions-card" class="card"></div>
-
-      <div class="card tips-card">
-        <h2 class="card-title">Before you start</h2>
-        <ul class="tips-list">
-          <li>
-            <span class="tip-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-            </span>
-            <span>Prop your phone up so your <strong>full body</strong> is in frame</span>
-          </li>
-          <li>
-            <span class="tip-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-            </span>
-            <span>Good lighting helps — face a window if possible</span>
-          </li>
-          <li>
-            <span class="tip-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.45"/></svg>
-            </span>
-            <span>Perform <strong>3–5 reps</strong> for accurate analysis</span>
-          </li>
-        </ul>
-      </div>
-
-      <button id="start-btn" class="btn-primary">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="white"/></svg>
-        Start Recording
-      </button>
     </div>
 
     <!-- ── VIEW: RECORDING ──────────────────────────────── -->

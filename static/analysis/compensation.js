@@ -380,6 +380,76 @@ export function detectCompensations(
     }
   }
 
+  // =========================================================
+  // GAIT  (screenType === 'gait')
+  // =========================================================
+  if (screenType === 'gait') {
+
+    // 1. Stiff-legged gait: swing-phase knee doesn't flex enough.
+    //    peakSwingKneeFlexion = minimum near-knee angle during swing.
+    //    Higher value = knee barely bends = worse.
+    if (angles.gaitSwingKneeFlexion != null) {
+      const sev = gradeFromThresholds(
+        angles.gaitSwingKneeFlexion,
+        t.gait_swing_knee_b, t.gait_swing_knee_c, t.gait_swing_knee_d,
+        t.gait_swing_knee_e, t.gait_swing_knee_f,
+        false,
+      );
+      if (sev !== 'A') {
+        findings.push({
+          name: 'Reduced Swing Phase Knee Flexion',
+          severity: sev,
+          description:
+            'Knee does not flex sufficiently during the swing phase — suggests a stiff-legged or antalgic gait pattern',
+          metricValue: Math.round(angles.gaitSwingKneeFlexion * 10) / 10,
+          metricLabel: 'min swing knee angle (deg)',
+        });
+      }
+    }
+
+    // 2. Excessive forward trunk lean during gait.
+    //    Normal walking lean: ~5–8°. Higher = worse.
+    if (angles.gaitTrunkLean != null) {
+      const sev = gradeFromThresholds(
+        angles.gaitTrunkLean,
+        t.gait_trunk_lean_b, t.gait_trunk_lean_c, t.gait_trunk_lean_d,
+        t.gait_trunk_lean_e, t.gait_trunk_lean_f,
+        false,
+      );
+      if (sev !== 'A') {
+        findings.push({
+          name: 'Excessive Forward Trunk Lean (Gait)',
+          severity: sev,
+          description:
+            'Trunk angled excessively forward during the stance phase of gait — may indicate hip extensor weakness or pain avoidance',
+          metricValue: Math.round(angles.gaitTrunkLean * 10) / 10,
+          metricLabel: 'mean stance trunk lean (deg)',
+        });
+      }
+    }
+
+    // 3. Restricted ankle dorsiflexion / limited push-off.
+    //    Tibial angle at mid-stance: lower = tibia more vertical = restricted DF. Lower is worse.
+    if (angles.gaitTibialAngle != null) {
+      const sev = gradeFromThresholds(
+        angles.gaitTibialAngle,
+        t.gait_tibial_b, t.gait_tibial_c, t.gait_tibial_d,
+        t.gait_tibial_e, t.gait_tibial_f,
+        true,
+      );
+      if (sev !== 'A') {
+        findings.push({
+          name: 'Reduced Ankle Dorsiflexion (Gait)',
+          severity: sev,
+          description:
+            'Tibia remains too upright at mid-stance — suggests restricted ankle dorsiflexion limiting forward progression',
+          metricValue: Math.round(angles.gaitTibialAngle * 10) / 10,
+          metricLabel: 'tibial angle at mid-stance (deg)',
+        });
+      }
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Build result
   // ---------------------------------------------------------------------------

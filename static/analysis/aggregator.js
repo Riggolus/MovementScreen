@@ -258,3 +258,199 @@ export function createAggregator(screenName) {
 
   return { addFrame, finalize };
 }
+
+// ---------------------------------------------------------------------------
+// Gait aggregator
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a gait trial aggregator.
+ * Collects all in-frame frames (no depth gate) then post-processes them to
+ * detect gait cycles via heel-strike detection and extract per-cycle metrics.
+ *
+ * @param {string} screenName
+ * @returns {{ addFrame: Function, finalize: Function }}
+ */
+export function createGaitAggregator(screenName) {
+  const frames = []; // { angles, relAnkleY }
+
+  /** @param {Object} angles  @param {number} relAnkleY */
+  function addFrame(angles, relAnkleY) {
+    frames.push({ angles, relAnkleY });
+  }
+
+  // ±win moving-average smoothing
+  function smooth(arr, win) {
+    const n = arr.length;
+    return arr.map((_, i) => {
+      let sum = 0, cnt = 0;
+      for (let j = Math.max(0, i - win); j <= Math.min(n - 1, i + win); j++) {
+        sum += arr[j]; cnt++;
+      }
+      return sum / cnt;
+    });
+  }
+
+  // Detect local maxima in relAnkleY = heel contacts ground (heel strike).
+  function detectHeelStrikes(relAnkleYs) {
+    const minGap  = 10; // ≥10 frames between strikes (~0.33 s at 30 fps)
+    const smoothed = smooth(relAnkleYs, 2);
+    const peaks = [];
+    for (let i = 1; i < smoothed.length - 1; i++) {
+      if (smoothed[i] >= smoothed[i - 1] && smoothed[i] >= smoothed[i + 1]) {
+        if (peaks.length === 0 || i - peaks[peaks.length - 1] >= minGap) {
+          peaks.push(i);
+        } else if (smoothed[i] > smoothed[peaks[peaks.length - 1]]) {
+          peaks[peaks.length - 1] = i; // replace if higher within gap
+        }
+      }
+    }
+    return peaks;
+  }
+
+  function avg(arr) {
+    const vals = arr.filter(v => v != null);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  }
+
+  /**
+   * Finalize gait analysis.
+   * @param {string} [lateralSide='left']
+   * @param {Object|null} [thresholds=null]
+   * @returns {Object} - same shape as createAggregator().finalize()
+   */
+  function finalize(lateralSide = 'left', thresholds = null) {
+    if (frames.length < 10) {
+      return {
+        screen_name:    screenName,
+        screen_type:    'gait',
+        frame_count:    frames.length,
+        camera_angle:   'lateral',
+        step_count:     0,
+        worst_severity: 'A',
+        has_findings:   false,
+        findings:       [],
+        stats:          [],
+        depth_warning:  true,
+      };
+    }
+
+    const nearKneeKey    = lateralSide === 'right' ? 'rightKneeFlexion'      : 'leftKneeFlexion';
+    const nearTibialKey  = lateralSide === 'right' ? 'tibialAngleRight'       : 'tibialAngleLeft';
+    const nearTibialField = lateralSide === 'right' ? 'tibial_angle_right'    : 'tibial_angle_left';
+    const nearKneeField   = lateralSide === 'right' ? 'right_knee_flexion'    : 'left_knee_flexion';
+    const sideLabel       = lateralSide.charAt(0).toUpperCase() + lateralSide.slice(1);
+
+    // ── Heel-strike detection ──────────────────────────────
+    const relAnkleYs  = frames.map(f => f.relAnkleY ?? 0);
+    const heelStrikes = detectHeelStrikes(relAnkleYs);
+    const stepCount   = Math.max(0, heelStrikes.length - 1);
+
+    // ── Per-cycle metric arrays ────────────────────────────
+    const swingKneeMins = [];
+    const stanceTrunks  = [];
+    const midStanceTibs = [];
+
+    for (let s = 0; s < stepCount; s++) {
+      const start    = heelStrikes[s];
+      const end      = heelStrikes[s + 1];
+      const cycleLen = end - start;
+      if (cycleLen < 6) continue;
+
+      // Stance: 0–60 % of cycle; swing: 60–100 %
+      const stanceEnd  = Math.floor(start + cycleLen * 0.60);
+      // Mid-stance: 20–45 % of cycle (peak DF window)
+      const midStSt    = Math.floor(start + cycleLen * 0.20);
+      const midStEnd   = Math.floor(start + cycleLen * 0.45);
+
+      // Swing: minimum knee angle = peak flexion (lower = more flexed = better)
+      const swingKnees = frames.slice(stanceEnd, end + 1)
+        .map(f => f.angles[nearKneeKey]).filter(v => v != null);
+      if (swingKnees.length) swingKneeMins.push(Math.min(...swingKnees));
+
+      // Stance: mean trunk lean
+      const stanceTrunkVals = frames.slice(start, stanceEnd + 1)
+        .map(f => f.angles.trunkLeanDegrees).filter(v => v != null);
+      const mTrunk = avg(stanceTrunkVals);
+      if (mTrunk != null) stanceTrunks.push(mTrunk);
+
+      // Mid-stance: mean tibial angle (DF proxy)
+      const midTibVals = frames.slice(midStSt, midStEnd + 1)
+        .map(f => f.angles[nearTibialKey]).filter(v => v != null);
+      const mTib = avg(midTibVals);
+      if (mTib != null) midStanceTibs.push(mTib);
+    }
+
+    // ── Aggregate across cycles (fall back to all-frame stats) ──
+    let gaitSwingKneeFlexion = avg(swingKneeMins);
+    let gaitTrunkLean        = avg(stanceTrunks);
+    let gaitTibialAngle      = avg(midStanceTibs);
+
+    if (gaitSwingKneeFlexion == null) {
+      const all = frames.map(f => f.angles[nearKneeKey]).filter(v => v != null);
+      if (all.length) gaitSwingKneeFlexion = Math.min(...all);
+    }
+    if (gaitTrunkLean == null) {
+      gaitTrunkLean = avg(frames.map(f => f.angles.trunkLeanDegrees));
+    }
+    if (gaitTibialAngle == null) {
+      gaitTibialAngle = avg(frames.map(f => f.angles[nearTibialKey]));
+    }
+
+    // ── Compensation detection ─────────────────────────────
+    const gaitAngles = {
+      gaitSwingKneeFlexion,
+      gaitTrunkLean,
+      gaitTibialAngle,
+    };
+
+    const { findings: rawFindings, worstSeverity, hasFindings } =
+      detectCompensations(gaitAngles, 'lateral', thresholds, 'gait', lateralSide);
+
+    const findings = rawFindings.map(f => ({
+      name:         f.name,
+      severity:     f.severity,
+      description:  f.description,
+      metric_value: f.metricValue,
+      metric_label: f.metricLabel,
+    }));
+
+    // ── Stats ──────────────────────────────────────────────
+    const stats = [];
+
+    const allKnees = frames.map(f => f.angles[nearKneeKey]).filter(v => v != null);
+    if (allKnees.length) {
+      const kMean = allKnees.reduce((a, b) => a + b, 0) / allKnees.length;
+      stats.push({ field: nearKneeField, name: `${sideLabel} Knee Flexion`,
+        min: round1(Math.min(...allKnees)), max: round1(Math.max(...allKnees)), mean: round1(kMean) });
+    }
+
+    const allTrunks = frames.map(f => f.angles.trunkLeanDegrees).filter(v => v != null);
+    if (allTrunks.length) {
+      const tMean = allTrunks.reduce((a, b) => a + b, 0) / allTrunks.length;
+      stats.push({ field: 'trunk_lean_degrees', name: 'Forward Trunk Lean',
+        min: round1(Math.min(...allTrunks)), max: round1(Math.max(...allTrunks)), mean: round1(tMean) });
+    }
+
+    const allTibs = frames.map(f => f.angles[nearTibialKey]).filter(v => v != null);
+    if (allTibs.length) {
+      const tibMean = allTibs.reduce((a, b) => a + b, 0) / allTibs.length;
+      stats.push({ field: nearTibialField, name: `${sideLabel} Tibial Angle`,
+        min: round1(Math.min(...allTibs)), max: round1(Math.max(...allTibs)), mean: round1(tibMean) });
+    }
+
+    return {
+      screen_name:    screenName,
+      screen_type:    'gait',
+      frame_count:    frames.length,
+      camera_angle:   'lateral',
+      step_count:     stepCount,
+      worst_severity: worstSeverity,
+      has_findings:   hasFindings,
+      findings,
+      stats,
+    };
+  }
+
+  return { addFrame, finalize };
+}

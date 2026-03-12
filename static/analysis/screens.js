@@ -182,3 +182,31 @@ export function acceptFrameOverhead(landmarks) {
   }
   return false;
 }
+
+// ---------------------------------------------------------------------------
+// Gait (walk-past) frame gate
+// ---------------------------------------------------------------------------
+
+/**
+ * Determine whether landmarks are usable for gait analysis.
+ * Unlike squat/lunge there is no depth gate — all in-frame frames are collected.
+ * Returns a relAnkleY value (heel Y minus hip Y) used for heel-strike detection.
+ *
+ * @param {Array}  landmarks   - MediaPipe 33-landmark array
+ * @param {string} [lateralSide='left'] - 'left' | 'right' — near leg (closest to camera)
+ * @returns {{ inFrame: boolean, relAnkleY: number|null }}
+ */
+export function acceptFrameGait(landmarks, lateralSide = 'left') {
+  const [hipIdx, kneeIdx, ankleIdx, heelIdx] = lateralSide === 'right'
+    ? [LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE, LM.RIGHT_HEEL]
+    : [LM.LEFT_HIP,  LM.LEFT_KNEE,  LM.LEFT_ANKLE,  LM.LEFT_HEEL];
+
+  if (!vis(landmarks, hipIdx) || !vis(landmarks, kneeIdx) ||
+      !vis(landmarks, ankleIdx) || !vis(landmarks, heelIdx)) {
+    return { inFrame: false, relAnkleY: null };
+  }
+
+  // Heel Y relative to hip Y (same side). Larger = foot near ground (stance); smaller = foot lifted (swing).
+  const relAnkleY = landmarks[heelIdx].y - landmarks[hipIdx].y;
+  return { inFrame: true, relAnkleY };
+}

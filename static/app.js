@@ -7,11 +7,12 @@ import {
 } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs';
 
 import { computeJointAngles, LM } from './analysis/joint_angles.js';
-import { createAggregator }   from './analysis/aggregator.js';
+import { createAggregator, createGaitAggregator } from './analysis/aggregator.js';
 import {
   acceptFrameSquat,
   acceptFrameLunge,
   acceptFrameOverhead,
+  acceptFrameGait,
 } from './analysis/screens.js';
 import {
   getThresholds,
@@ -24,6 +25,7 @@ import {
   saveAssessment,
   getAssessments,
   getAssessment,
+  deleteAssessment,
 } from './db/local_db.js';
 
 // ── MediaPipe ────────────────────────────────────────────
@@ -92,6 +94,7 @@ const skeletonCtx    = skeletonCanvas.getContext('2d');
 const timerEl        = document.getElementById('timer');
 const lungeOptions        = document.getElementById('lunge-options');
 const lateralSideOptions  = document.getElementById('lateral-side-options');
+const setupOptions        = document.getElementById('setup-options');
 const poseStatus     = document.getElementById('pose-status');
 const headerNav      = document.getElementById('header-nav');
 
@@ -159,6 +162,18 @@ const SCREEN_INSTRUCTIONS = {
     ],
     camera: 'Anterior view: captures shoulder asymmetry. Lateral view: captures trunk extension compensation.',
   },
+  gait: {
+    title: 'Gait Analysis',
+    desc: (side) => `Stand at one end of the frame with your <strong>${side}</strong> leg nearest the camera. Walk at your normal pace past the camera and stop on the other side.`,
+    cues: (side) => [
+      `Face the direction you will walk — ${side} side toward the camera`,
+      'Walk at your everyday pace — not slower or faster than usual',
+      'Take 4–6 steps past the camera',
+      'Let your arms swing naturally — no hands in pockets',
+      'Press Stop after you have finished walking past',
+    ],
+    camera: 'Lateral view only. Near leg is analysed — far-leg data is excluded.',
+  },
 };
 
 function renderInstructions(screen, side) {
@@ -178,13 +193,25 @@ function renderInstructions(screen, side) {
 }
 
 // ── Screen / angle / side selectors ──────────────────────
-document.querySelectorAll('.screen-btn').forEach(btn => {
+const angleOptionGroup = document.getElementById('angle-option-group');
+
+document.querySelectorAll('.screen-row').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.screen-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.screen-row').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentScreen = btn.dataset.screen;
+
+    const isGait = currentScreen === 'gait';
+    if (isGait) currentAngle = 'lateral'; // gait is always lateral
+
+    // Show/hide camera angle picker (hidden for gait — always lateral)
+    if (angleOptionGroup) angleOptionGroup.classList.toggle('hidden', isGait);
+
     lungeOptions.classList.toggle('hidden', currentScreen !== 'lunge');
-    renderInstructions(currentScreen, currentSide);
+    // Show lateral-side selector for gait and for lateral squat/lunge
+    lateralSideOptions.classList.toggle('hidden', !isGait && currentAngle !== 'lateral');
+    setupOptions.classList.add('open');
+    renderInstructions(currentScreen, currentLateralSide);
   });
 });
 
@@ -194,6 +221,7 @@ document.querySelectorAll('.angle-btn').forEach(btn => {
     btn.classList.add('active');
     currentAngle = btn.dataset.angle;
     lateralSideOptions.classList.toggle('hidden', currentAngle !== 'lateral');
+    lungeOptions.classList.toggle('hidden', currentScreen !== 'lunge');
   });
 });
 
@@ -215,7 +243,7 @@ document.querySelectorAll('.lateral-side-options .toggle-btn').forEach(btn => {
 });
 
 // Initialise instructions on load
-renderInstructions('squat', 'left');
+renderInstructions('squat', currentLateralSide);
 
 // ── Position check ────────────────────────────────────────
 // Key landmark indices needed per camera angle
@@ -286,8 +314,10 @@ async function startRecording() {
   preview.style.transform        = mirrored ? 'scaleX(-1)' : '';
   skeletonCanvas.style.transform = mirrored ? 'scaleX(-1)' : '';
 
-  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Forward Lunge', overhead: 'Overhead Reach' };
-  aggregator = createAggregator(SCREEN_NAMES[currentScreen] || currentScreen);
+  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Forward Lunge', overhead: 'Overhead Reach', gait: 'Gait Analysis' };
+  aggregator = currentScreen === 'gait'
+    ? createGaitAggregator(SCREEN_NAMES[currentScreen])
+    : createAggregator(SCREEN_NAMES[currentScreen] || currentScreen);
 
   isPositioning = true;
   positionGoodFrames = 0;
@@ -385,11 +415,16 @@ function startSkeletonLoop() {
               walkTowardFrames = 0;
             }
 
-            let atDepth = false;
-            if (currentScreen === 'squat')         atDepth = acceptFrameSquat(lms, currentAngle, currentLateralSide);
-            else if (currentScreen === 'lunge')    atDepth = acceptFrameLunge(lms, currentAngle, currentSide);
-            else if (currentScreen === 'overhead') atDepth = acceptFrameOverhead(lms);
-            if (atDepth) aggregator.addFrame(computeJointAngles(lms));
+            if (currentScreen === 'gait') {
+              const { inFrame, relAnkleY } = acceptFrameGait(lms, currentLateralSide);
+              if (inFrame) aggregator.addFrame(computeJointAngles(lms), relAnkleY);
+            } else {
+              let atDepth = false;
+              if (currentScreen === 'squat')         atDepth = acceptFrameSquat(lms, currentAngle, currentLateralSide);
+              else if (currentScreen === 'lunge')    atDepth = acceptFrameLunge(lms, currentAngle, currentSide);
+              else if (currentScreen === 'overhead') atDepth = acceptFrameOverhead(lms);
+              if (atDepth) aggregator.addFrame(computeJointAngles(lms));
+            }
           }
         } else {
           poseStatus.textContent = 'Waiting for pose…';
@@ -461,12 +496,14 @@ function updateTimerDisplay() {
 async function analyseLocally() {
   if (!aggregator) { showError('No recording data found. Please try again.'); return; }
   try {
-    const lateralSide = (currentAngle === 'lateral' && currentScreen === 'squat') ? currentLateralSide : null;
-    const result = aggregator.finalize(currentAngle, currentScreen, getThresholds(), lateralSide);
-
-    // Warn if very few depth frames were captured (likely didn't reach depth)
-    if (result.frame_count < 5) {
-      result.depth_warning = true;
+    let result;
+    if (currentScreen === 'gait') {
+      result = aggregator.finalize(currentLateralSide, getThresholds());
+      if ((result.step_count ?? 0) < 2) result.depth_warning = true;
+    } else {
+      const lateralSide = (currentAngle === 'lateral' && currentScreen === 'squat') ? currentLateralSide : null;
+      result = aggregator.finalize(currentAngle, currentScreen, getThresholds(), lateralSide);
+      if (result.frame_count < 5) result.depth_warning = true;
     }
 
     const record = {
@@ -515,7 +552,7 @@ function renderResults(data) {
     <div class="results-header">
       <div class="results-grade-ring" style="border-color:${color};color:${color}">${SEV_EMOJI[sev]}</div>
       <h1>${data.screen_name}</h1>
-      <p class="results-meta">${data.frame_count} frames · ${ANGLE_LABEL[data.camera_angle] ?? ''} view</p>
+      <p class="results-meta">${data.screen_type === 'gait' && data.step_count != null ? `${data.step_count} step${data.step_count !== 1 ? 's' : ''} detected · ` : ''}${data.frame_count} frames · ${ANGLE_LABEL[data.camera_angle] ?? ''} view</p>
       <span class="overall-pill" style="background:${color}">${SEV_LABEL[sev]}</span>
       ${data.saved ? `<p class="saved-badge">✓ Saved to your history</p>` : ''}
     </div>
@@ -524,10 +561,13 @@ function renderResults(data) {
 
   // ── Depth warning ─────────────────────────────────────────
   if (data.depth_warning) {
+    const warnMsg = data.screen_type === 'gait'
+      ? 'Too few steps detected — walk further past the camera for accurate results.'
+      : 'Too few frames captured at depth — try going lower or recording a longer set for accurate results.';
     html += `
       <div class="depth-warning">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span>Too few frames captured at depth — try squatting lower or recording a longer set for accurate results.</span>
+        <span>${warnMsg}</span>
       </div>
     `;
   }
@@ -633,8 +673,8 @@ function renderResults(data) {
 }
 
 // ── History / Progress ────────────────────────────────────
-const SCREEN_EMOJI = { squat: '🏋️', lunge: '🦵', overhead: '🙌' };
-const SCREEN_COLORS = { squat: '#6366f1', lunge: '#8b5cf6', overhead: '#0ea5e9' };
+const SCREEN_EMOJI = { squat: '🏋️', lunge: '🦵', overhead: '🙌', gait: '🚶' };
+const SCREEN_COLORS = { squat: '#6366f1', lunge: '#8b5cf6', overhead: '#0ea5e9', gait: '#0d9488' };
 
 async function loadHistory() {
   showView('history');
@@ -644,7 +684,7 @@ async function loadHistory() {
     const assessments = await getAssessments(50);
 
     // Build by_screen progress (oldest-first for the trend chart)
-    const by_screen = { squat: [], lunge: [], overhead: [] };
+    const by_screen = { squat: [], lunge: [], overhead: [], gait: [] };
     for (const a of [...assessments].reverse()) {
       if (by_screen[a.screen_type]) {
         by_screen[a.screen_type].push({ recorded_at: a.recorded_at, worst_severity: a.worst_severity });
@@ -703,6 +743,9 @@ function renderHistory(assessments, byScreen) {
               <div class="assessment-date">${date}</div>
             </div>
             <span class="assessment-sev-pill" style="background:${color}">${SEV_LABEL[a.worst_severity]}</span>
+            <button class="delete-btn" data-delete-id="${a.id}" title="Delete assessment" aria-label="Delete assessment">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
           </div>
           <div class="assessment-body" id="body-${a.id}"></div>
         </div>
@@ -722,6 +765,31 @@ function renderHistory(assessments, byScreen) {
 
   views.history.innerHTML = html;
   document.getElementById('new-assessment-btn').addEventListener('click', resetApp);
+
+  // Delete buttons — tap once to arm, tap again within 3s to confirm
+  const deleteTimers = new Map();
+  document.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation(); // don't expand the card
+      const id = parseInt(btn.dataset.deleteId, 10);
+      if (deleteTimers.has(id)) {
+        // Second tap — confirmed
+        clearTimeout(deleteTimers.get(id));
+        deleteTimers.delete(id);
+        btn.classList.remove('armed');
+        await deleteAssessment(id);
+        loadHistory();
+      } else {
+        // First tap — arm it
+        btn.classList.add('armed');
+        const timer = setTimeout(() => {
+          btn.classList.remove('armed');
+          deleteTimers.delete(id);
+        }, 3000);
+        deleteTimers.set(id, timer);
+      }
+    });
+  });
 
   // Draw chart
   if (hasData) {
@@ -1424,6 +1492,36 @@ const RECOMMENDATIONS = {
       'Start unilateral sets with your weaker side and match reps on the stronger side',
       'Video yourself from the front to monitor symmetry over time',
       'Consider a professional movement screen with a physiotherapist or strength coach',
+    ],
+  },
+  'Swing Phase Knee Flexion': {
+    what: 'Your knee is not bending enough during the swing (airborne) phase of your walk.',
+    means: 'Reduced swing-phase knee flexion is often called a stiff-legged or antalgic gait. It may reflect pain avoidance, quadriceps weakness, or restricted knee range of motion.',
+    tips: [
+      'Knee flexion mobility work: prone heel-to-glute stretches, supine knee bends',
+      'Hamstring strengthening: leg curls, Nordic curls, Romanian deadlifts',
+      'Gait retraining: conscious cues to "kick your heel up" during swing',
+      'Consult a physiotherapist if pain is limiting knee bend during walking',
+    ],
+  },
+  'Forward Trunk Lean (Gait)': {
+    what: 'Your upper body is leaning forward more than expected while walking.',
+    means: 'Excessive trunk lean during gait is often linked to hip extensor weakness, tight hip flexors, or an antalgic posture to avoid pain at heel strike.',
+    tips: [
+      'Hip extensor strengthening: glute bridges, hip thrusts, cable pull-throughs',
+      'Stretch hip flexors: couch stretch, kneeling hip flexor stretch',
+      'Core stability work: dead bugs, Pallof press, anti-rotation exercises',
+      'Walk tall — imagine a string pulling the crown of your head upward',
+    ],
+  },
+  'Ankle Dorsiflexion (Gait)': {
+    what: 'Your ankle is not bending forward enough during the mid-stance phase of your walk.',
+    means: 'Restricted ankle dorsiflexion limits forward tibial progression, reducing push-off power and forcing compensations higher up the kinetic chain.',
+    tips: [
+      'Daily calf and Achilles stretching — both straight-knee and bent-knee variations',
+      'Banded ankle mobilisation and wall ankle stretches',
+      'Soft tissue work on the calf, Achilles, and plantar fascia',
+      'Consider orthotics or heel lifts as a short-term aid while building mobility',
     ],
   },
 };
