@@ -358,7 +358,10 @@ export function detectCompensations(
 
     // 11. Spinal segmental curvature
     //     Ear-shoulder-hip angle: 180° = straight; deviations = curvature.
-    if (angles.spineSegmentalAngle != null) {
+    //     Excluded from squat: at depth, thoracolumbar flexion is a normal part
+    //     of the movement and consistently exceeds the 7° Grade B threshold on
+    //     healthy squatters. Overlaps with trunk lean and upper trunk checks.
+    if (screenType !== 'squat' && angles.spineSegmentalAngle != null) {
       const deviation = 180.0 - angles.spineSegmentalAngle;
       if (deviation > 0) {
         const sev = gradeFromThresholds(
