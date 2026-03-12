@@ -1361,7 +1361,7 @@ function renderReport(data, source) {
   html += `
     <div class="report-masthead">
       <div class="report-logo-row">
-        <svg width="22" height="22" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="6" r="3.5" fill="currentColor"/><path d="M14 10v6M10 13l4 3 4-3M10 22l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="report-logo-mark" aria-hidden="true"></span>
         <span>MovementScreen</span>
       </div>
       <h2>Movement Assessment Report</h2>
