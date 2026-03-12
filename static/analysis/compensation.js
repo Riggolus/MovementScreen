@@ -198,7 +198,10 @@ export function detectCompensations(
     }
 
     // 4. Bilateral symmetry (L vs R) — only valid from a frontal camera
-    checkBilateralAsymmetry(findings, t, 'Knee Flexion',     angles.leftKneeFlexion,     angles.rightKneeFlexion);
+    // NOTE: Knee flexion is intentionally excluded here. From the anterior view,
+    // angleBetween(hip, knee, ankle) in 2D conflates sagittal depth, foot-turn
+    // angle, and frontal valgus/varus — making left-vs-right comparisons
+    // unreliable and prone to false positives.
     checkBilateralAsymmetry(findings, t, 'Hip Flexion',      angles.leftHipFlexion,      angles.rightHipFlexion);
     checkBilateralAsymmetry(findings, t, 'Shoulder Flexion', angles.leftShoulderFlexion, angles.rightShoulderFlexion);
   }
