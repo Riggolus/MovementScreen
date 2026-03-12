@@ -130,9 +130,10 @@ export function createAggregator(screenName) {
    * @param {string}      [cameraAngle='anterior']
    * @param {string}      [screenType='']
    * @param {Object|null} [thresholds=null]
+   * @param {string|null} [lateralSide=null]  - 'left'|'right' for lateral squat
    * @returns {Object}
    */
-  function finalize(cameraAngle = 'anterior', screenType = '', thresholds = null) {
+  function finalize(cameraAngle = 'anterior', screenType = '', thresholds = null, lateralSide = null) {
 
     // -----------------------------------------------------------------------
     // 1. Collect stats for each tracked field
@@ -229,7 +230,7 @@ export function createAggregator(screenName) {
     // 3. Run compensation detection on the worst-case angles
     // -----------------------------------------------------------------------
     const { findings: rawFindings, worstSeverity, hasFindings } =
-      detectCompensations(worst, cameraAngle, thresholds, screenType);
+      detectCompensations(worst, cameraAngle, thresholds, screenType, lateralSide);
 
     // Convert camelCase finding keys to snake_case to match server response format
     const findings = rawFindings.map(f => ({

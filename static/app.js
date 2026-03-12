@@ -51,9 +51,10 @@ initPoseLandmarker().catch(() => {});
 // ── Auth state ───────────────────────────────────────────
 
 // ── App state ─────────────────────────────────────────────
-let currentScreen  = 'squat';
-let currentSide    = 'left';
-let currentAngle   = 'anterior';
+let currentScreen      = 'squat';
+let currentSide        = 'left';
+let currentAngle       = 'anterior';
+let currentLateralSide = 'left'; // which leg is closest to the camera in lateral view
 let facingMode     = 'environment';
 let mediaStream    = null;
 let isRecording    = false;
@@ -77,7 +78,8 @@ const preview        = document.getElementById('preview');
 const skeletonCanvas = document.getElementById('skeleton-canvas');
 const skeletonCtx    = skeletonCanvas.getContext('2d');
 const timerEl        = document.getElementById('timer');
-const lungeOptions   = document.getElementById('lunge-options');
+const lungeOptions        = document.getElementById('lunge-options');
+const lateralSideOptions  = document.getElementById('lateral-side-options');
 const poseStatus     = document.getElementById('pose-status');
 const headerNav      = document.getElementById('header-nav');
 
@@ -179,15 +181,24 @@ document.querySelectorAll('.angle-btn').forEach(btn => {
     document.querySelectorAll('.angle-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentAngle = btn.dataset.angle;
+    lateralSideOptions.classList.toggle('hidden', currentAngle !== 'lateral');
   });
 });
 
-document.querySelectorAll('.toggle-btn').forEach(btn => {
+document.querySelectorAll('.lunge-options .toggle-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.lunge-options .toggle-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentSide = btn.dataset.side;
     renderInstructions(currentScreen, currentSide);
+  });
+});
+
+document.querySelectorAll('.lateral-side-options .toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.lateral-side-options .toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentLateralSide = btn.dataset.side;
   });
 });
 
@@ -283,7 +294,7 @@ function startSkeletonLoop() {
           poseStatus.classList.add('detected');
           if (isRecording && aggregator) {
             let atDepth = false;
-            if (currentScreen === 'squat')         atDepth = acceptFrameSquat(lms, currentAngle);
+            if (currentScreen === 'squat')         atDepth = acceptFrameSquat(lms, currentAngle, currentLateralSide);
             else if (currentScreen === 'lunge')    atDepth = acceptFrameLunge(lms, currentAngle, currentSide);
             else if (currentScreen === 'overhead') atDepth = acceptFrameOverhead(lms);
             if (atDepth) aggregator.addFrame(computeJointAngles(lms));
@@ -354,7 +365,14 @@ function updateTimerDisplay() {
 async function analyseLocally() {
   if (!aggregator) { showError('No recording data found. Please try again.'); return; }
   try {
-    const result = aggregator.finalize(currentAngle, currentScreen, getThresholds());
+    const lateralSide = (currentAngle === 'lateral' && currentScreen === 'squat') ? currentLateralSide : null;
+    const result = aggregator.finalize(currentAngle, currentScreen, getThresholds(), lateralSide);
+
+    // Warn if very few depth frames were captured (likely didn't reach depth)
+    if (result.frame_count < 5) {
+      result.depth_warning = true;
+    }
+
     const record = {
       ...result,
       lead_side:   currentScreen === 'lunge' ? currentSide : null,
@@ -407,6 +425,16 @@ function renderResults(data) {
     </div>
     <div class="results-body">
   `;
+
+  // ── Depth warning ─────────────────────────────────────────
+  if (data.depth_warning) {
+    html += `
+      <div class="depth-warning">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>Too few frames captured at depth — try squatting lower or recording a longer set for accurate results.</span>
+      </div>
+    `;
+  }
 
   // ── Summary ──────────────────────────────────────────────
   html += `
