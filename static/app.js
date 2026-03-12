@@ -6,7 +6,7 @@ import {
   DrawingUtils,
 } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs';
 
-import { computeJointAngles } from './analysis/joint_angles.js';
+import { computeJointAngles, LM } from './analysis/joint_angles.js';
 import { createAggregator }   from './analysis/aggregator.js';
 import {
   acceptFrameSquat,
@@ -51,12 +51,25 @@ initPoseLandmarker().catch(() => {});
 // ── Auth state ───────────────────────────────────────────
 
 // ── App state ─────────────────────────────────────────────
-let currentScreen  = 'squat';
-let currentSide    = 'left';
-let currentAngle   = 'anterior';
+let currentScreen      = 'squat';
+let currentSide        = 'left';
+let currentAngle       = 'anterior';
+let currentLateralSide = 'left'; // which leg is closest to the camera in lateral view
 let facingMode     = 'environment';
 let mediaStream    = null;
-let isRecording    = false;
+let isRecording        = false;
+let isPositioning      = false;
+let positionGoodFrames = 0;
+const POSITION_HOLD_FRAMES = 45; // ~1.5 s at 30 fps
+
+// Auto-stop: if body fills >92% of frame for 20 consecutive frames after
+// at least 60 recording frames (~2 s), the patient walked toward the camera.
+let recordingFrameCount = 0;
+let walkTowardFrames    = 0;
+const WALK_TOWARD_THRESHOLD = 0.92;
+const WALK_TOWARD_FRAMES    = 20;
+const MIN_FRAMES_BEFORE_AUTOSTOP = 60;
+
 let aggregator     = null;
 let timerInterval  = null;
 let secondsElapsed = 0;
@@ -77,7 +90,8 @@ const preview        = document.getElementById('preview');
 const skeletonCanvas = document.getElementById('skeleton-canvas');
 const skeletonCtx    = skeletonCanvas.getContext('2d');
 const timerEl        = document.getElementById('timer');
-const lungeOptions   = document.getElementById('lunge-options');
+const lungeOptions        = document.getElementById('lunge-options');
+const lateralSideOptions  = document.getElementById('lateral-side-options');
 const poseStatus     = document.getElementById('pose-status');
 const headerNav      = document.getElementById('header-nav');
 
@@ -179,43 +193,75 @@ document.querySelectorAll('.angle-btn').forEach(btn => {
     document.querySelectorAll('.angle-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentAngle = btn.dataset.angle;
+    lateralSideOptions.classList.toggle('hidden', currentAngle !== 'lateral');
   });
 });
 
-document.querySelectorAll('.toggle-btn').forEach(btn => {
+document.querySelectorAll('.lunge-options .toggle-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.lunge-options .toggle-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentSide = btn.dataset.side;
     renderInstructions(currentScreen, currentSide);
   });
 });
 
+document.querySelectorAll('.lateral-side-options .toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.lateral-side-options .toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentLateralSide = btn.dataset.side;
+  });
+});
+
 // Initialise instructions on load
 renderInstructions('squat', 'left');
 
-// ── Countdown ─────────────────────────────────────────────
-let countdownActive = false;
+// ── Position check ────────────────────────────────────────
+// Key landmark indices needed per camera angle
+const FRONTAL_KEY_LMS = [
+  LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER,
+  LM.LEFT_HIP,      LM.RIGHT_HIP,
+  LM.LEFT_KNEE,     LM.RIGHT_KNEE,
+  LM.LEFT_ANKLE,    LM.RIGHT_ANKLE,
+];
 
-async function runCountdown() {
-  countdownActive = true;
-  const overlay = document.getElementById('countdown-overlay');
-  const numEl   = document.getElementById('countdown-num');
-  overlay.classList.remove('hidden');
+/**
+ * Check whether the person is optimally positioned in frame.
+ * Returns null when position is good, or a guidance string otherwise.
+ */
+function checkPosition(lms) {
+  const isLateral = currentAngle === 'lateral';
 
-  for (let i = 5; i >= 1; i--) {
-    if (!countdownActive) break;
-    numEl.textContent = i;
-    numEl.classList.remove('pop');
-    void numEl.offsetWidth; // force reflow to restart animation
-    numEl.classList.add('pop');
-    await new Promise(r => setTimeout(r, 1000));
+  // Determine which landmarks must be visible
+  const required = isLateral
+    ? (currentLateralSide === 'right'
+        ? [LM.RIGHT_SHOULDER, LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE]
+        : [LM.LEFT_SHOULDER,  LM.LEFT_HIP,  LM.LEFT_KNEE,  LM.LEFT_ANKLE])
+    : FRONTAL_KEY_LMS;
+
+  if (!required.every(i => lms[i].visibility > 0.5)) return 'Step fully into frame';
+
+  // Body height as a fraction of frame height (shoulder top → ankle bottom)
+  const shoulderYs = [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER]
+    .filter(i => lms[i].visibility > 0.5).map(i => lms[i].y);
+  const ankleYs = [LM.LEFT_ANKLE, LM.RIGHT_ANKLE]
+    .filter(i => lms[i].visibility > 0.5).map(i => lms[i].y);
+  if (!shoulderYs.length || !ankleYs.length) return 'Step fully into frame';
+
+  const bodyH = Math.max(...ankleYs) - Math.min(...shoulderYs);
+  if (bodyH < 0.50) return 'Move closer';
+  if (bodyH > 0.88) return 'Move further away';
+
+  // Horizontal centering (frontal views only)
+  if (!isLateral) {
+    const visShoulders = [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER].filter(i => lms[i].visibility > 0.5);
+    const midX = visShoulders.reduce((s, i) => s + lms[i].x, 0) / visShoulders.length;
+    if (midX < 0.35) return 'Step to the right';
+    if (midX > 0.65) return 'Step to the left';
   }
 
-  overlay.classList.add('hidden');
-  const completed = countdownActive;
-  countdownActive = false;
-  return completed;
+  return null; // good
 }
 
 // ── Recording ─────────────────────────────────────────────
@@ -240,20 +286,44 @@ async function startRecording() {
   preview.style.transform        = mirrored ? 'scaleX(-1)' : '';
   skeletonCanvas.style.transform = mirrored ? 'scaleX(-1)' : '';
 
+  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Forward Lunge', overhead: 'Overhead Reach' };
+  aggregator = createAggregator(SCREEN_NAMES[currentScreen] || currentScreen);
+
+  isPositioning = true;
+  positionGoodFrames = 0;
+  setPositionOverlay('Waiting for pose…', 0);
+
   if (poseLandmarker) {
     drawingUtils = new DrawingUtils(skeletonCtx);
     startSkeletonLoop();
   }
+}
 
-  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Forward Lunge', overhead: 'Overhead Reach' };
-  aggregator = createAggregator(SCREEN_NAMES[currentScreen] || currentScreen);
+function getBodyH(lms) {
+  const shoulderYs = [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER]
+    .filter(i => lms[i].visibility > 0.5).map(i => lms[i].y);
+  const ankleYs = [LM.LEFT_ANKLE, LM.RIGHT_ANKLE]
+    .filter(i => lms[i].visibility > 0.5).map(i => lms[i].y);
+  if (!shoulderYs.length || !ankleYs.length) return 0;
+  return Math.max(...ankleYs) - Math.min(...shoulderYs);
+}
 
-  // Countdown — user can see themselves and get into position
-  const started = await runCountdown();
-  if (!started) return; // cancelled during countdown
-
+function beginRecording() {
+  isPositioning = false;
+  recordingFrameCount = 0;
+  walkTowardFrames = 0;
+  document.getElementById('position-overlay').classList.add('hidden');
   isRecording = true;
   startTimer();
+}
+
+document.getElementById('position-skip-btn').addEventListener('click', beginRecording);
+
+function setPositionOverlay(msg, progress) {
+  document.getElementById('position-overlay').classList.remove('hidden');
+  document.getElementById('position-message').textContent = msg;
+  document.getElementById('position-bar').style.width = `${Math.round(progress * 100)}%`;
+  document.getElementById('position-hint').style.opacity = progress > 0 ? '1' : '0';
 }
 
 // ── Skeleton loop ─────────────────────────────────────────
@@ -273,17 +343,50 @@ function startSkeletonLoop() {
         const result = poseLandmarker.detectForVideo(preview, now);
         if (result.landmarks?.length > 0) {
           const lms = result.landmarks[0];
+
+          // Skeleton colour: green when position is good, indigo otherwise
+          const skelColor = (isPositioning && positionGoodFrames > 0)
+            ? 'rgba(16,185,129,.85)' : 'rgba(99,102,241,.85)';
           drawingUtils.drawConnectors(lms, PoseLandmarker.POSE_CONNECTIONS, {
-            color: 'rgba(99,102,241,.85)', lineWidth: 2.5,
+            color: skelColor, lineWidth: 2.5,
           });
           drawingUtils.drawLandmarks(lms, {
-            color: '#ffffff', fillColor: 'rgba(99,102,241,.7)', lineWidth: 1, radius: 4,
+            color: '#ffffff', fillColor: isPositioning && positionGoodFrames > 0
+              ? 'rgba(16,185,129,.7)' : 'rgba(99,102,241,.7)',
+            lineWidth: 1, radius: 4,
           });
+
           poseStatus.textContent = 'Pose detected';
           poseStatus.classList.add('detected');
-          if (isRecording && aggregator) {
+
+          if (isPositioning) {
+            const guidance = checkPosition(lms);
+            if (guidance === null) {
+              positionGoodFrames++;
+              const pct = positionGoodFrames / POSITION_HOLD_FRAMES;
+              setPositionOverlay('Perfect — hold still', Math.min(pct, 1));
+              if (positionGoodFrames >= POSITION_HOLD_FRAMES) beginRecording();
+            } else {
+              positionGoodFrames = 0;
+              setPositionOverlay(guidance, 0);
+            }
+          } else if (isRecording && aggregator) {
+            recordingFrameCount++;
+
+            // Auto-stop: patient walked toward camera after exercise
+            const bodyH = getBodyH(lms);
+            if (recordingFrameCount > MIN_FRAMES_BEFORE_AUTOSTOP && bodyH > WALK_TOWARD_THRESHOLD) {
+              walkTowardFrames++;
+              if (walkTowardFrames >= WALK_TOWARD_FRAMES) {
+                stopRecording();
+                return;
+              }
+            } else {
+              walkTowardFrames = 0;
+            }
+
             let atDepth = false;
-            if (currentScreen === 'squat')         atDepth = acceptFrameSquat(lms, currentAngle);
+            if (currentScreen === 'squat')         atDepth = acceptFrameSquat(lms, currentAngle, currentLateralSide);
             else if (currentScreen === 'lunge')    atDepth = acceptFrameLunge(lms, currentAngle, currentSide);
             else if (currentScreen === 'overhead') atDepth = acceptFrameOverhead(lms);
             if (atDepth) aggregator.addFrame(computeJointAngles(lms));
@@ -291,6 +394,10 @@ function startSkeletonLoop() {
         } else {
           poseStatus.textContent = 'Waiting for pose…';
           poseStatus.classList.remove('detected');
+          if (isPositioning) {
+            positionGoodFrames = 0;
+            setPositionOverlay('Step fully into frame', 0);
+          }
         }
       } catch { /* skip frame */ }
     }
@@ -315,8 +422,8 @@ function stopRecording() {
 }
 
 document.getElementById('cancel-btn').addEventListener('click', () => {
-  countdownActive = false;
-  document.getElementById('countdown-overlay').classList.add('hidden');
+  isPositioning = false; positionGoodFrames = 0;
+  recordingFrameCount = 0; walkTowardFrames = 0;
   stopTimer(); stopSkeletonLoop();
   isRecording = false;
   mediaStream?.getTracks().forEach(t => t.stop());
@@ -354,7 +461,14 @@ function updateTimerDisplay() {
 async function analyseLocally() {
   if (!aggregator) { showError('No recording data found. Please try again.'); return; }
   try {
-    const result = aggregator.finalize(currentAngle, currentScreen, getThresholds());
+    const lateralSide = (currentAngle === 'lateral' && currentScreen === 'squat') ? currentLateralSide : null;
+    const result = aggregator.finalize(currentAngle, currentScreen, getThresholds(), lateralSide);
+
+    // Warn if very few depth frames were captured (likely didn't reach depth)
+    if (result.frame_count < 5) {
+      result.depth_warning = true;
+    }
+
     const record = {
       ...result,
       lead_side:   currentScreen === 'lunge' ? currentSide : null,
@@ -407,6 +521,16 @@ function renderResults(data) {
     </div>
     <div class="results-body">
   `;
+
+  // ── Depth warning ─────────────────────────────────────────
+  if (data.depth_warning) {
+    html += `
+      <div class="depth-warning">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>Too few frames captured at depth — try squatting lower or recording a longer set for accurate results.</span>
+      </div>
+    `;
+  }
 
   // ── Summary ──────────────────────────────────────────────
   html += `

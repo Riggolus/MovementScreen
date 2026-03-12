@@ -47,9 +47,10 @@ const SQUAT_DEPTH_THRESHOLD_DEGREES = 115.0;
 
 /**
  * Frontal-camera hip-to-knee normalised height ratio threshold.
- * When hip_norm >= knee_norm * this factor the hips are near/at/below knee level.
+ * 0.95 = hip must be within ~5% of knee height (near-parallel).
+ * Was 0.85 which fired too early (above-parallel quarter squats passing as "at depth").
  */
-const FRONTAL_DEPTH_HIP_FRACTION = 0.85;
+const FRONTAL_DEPTH_HIP_FRACTION = 0.95;
 
 /** Lead-knee angle below which a lunge is considered at-depth. */
 const LUNGE_DEPTH_THRESHOLD_DEGREES = 105.0;
@@ -69,11 +70,12 @@ const LUNGE_DEPTH_THRESHOLD_DEGREES = 105.0;
  * Lateral:
  *   Uses the 2-D hip-knee-ankle angle, which correctly captures sagittal flexion.
  *
- * @param {Array}  landmarks   - MediaPipe 33-landmark array
- * @param {string} cameraAngle - 'anterior' | 'posterior' | 'lateral'
+ * @param {Array}  landmarks    - MediaPipe 33-landmark array
+ * @param {string} cameraAngle  - 'anterior' | 'posterior' | 'lateral'
+ * @param {string} [lateralSide='left'] - 'left' | 'right' — only used for lateral view
  * @returns {boolean}
  */
-export function acceptFrameSquat(landmarks, cameraAngle) {
+export function acceptFrameSquat(landmarks, cameraAngle, lateralSide = 'left') {
   if (cameraAngle === 'anterior' || cameraAngle === 'posterior') {
     // Collect visible shoulder and ankle y-coordinates for body height normalisation
     const shoulderYs = [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER]
@@ -106,21 +108,19 @@ export function acceptFrameSquat(landmarks, cameraAngle) {
     return false;
 
   } else {
-    // Lateral camera: 2-D knee flexion correctly captures sagittal depth
-    for (const [hipIdx, kneeIdx, ankleIdx] of [
-      [LM.LEFT_HIP,  LM.LEFT_KNEE,  LM.LEFT_ANKLE],
-      [LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
-    ]) {
-      if (vis(landmarks, hipIdx) && vis(landmarks, kneeIdx) && vis(landmarks, ankleIdx)) {
-        const kneeAngle = angleBetween(
-          xy(landmarks, hipIdx),
-          xy(landmarks, kneeIdx),
-          xy(landmarks, ankleIdx),
-        );
-        if (kneeAngle < SQUAT_DEPTH_THRESHOLD_DEGREES) {
-          return true;
-        }
-      }
+    // Lateral camera: only check the selected side (the near/visible leg).
+    // The far leg's landmarks are unreliable from a side-on view.
+    const [hipIdx, kneeIdx, ankleIdx] = lateralSide === 'right'
+      ? [LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE]
+      : [LM.LEFT_HIP,  LM.LEFT_KNEE,  LM.LEFT_ANKLE];
+
+    if (vis(landmarks, hipIdx) && vis(landmarks, kneeIdx) && vis(landmarks, ankleIdx)) {
+      const kneeAngle = angleBetween(
+        xy(landmarks, hipIdx),
+        xy(landmarks, kneeIdx),
+        xy(landmarks, ankleIdx),
+      );
+      return kneeAngle < SQUAT_DEPTH_THRESHOLD_DEGREES;
     }
     return false;
   }

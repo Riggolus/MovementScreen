@@ -104,6 +104,7 @@ const GRADE_ORDER = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5 };
  * @param {string}      [cameraAngle='anterior']
  * @param {Object|null} [thresholds=null]    - threshold config (from getThresholds())
  * @param {string}      [screenType='']
+ * @param {string|null} [lateralSide=null]   - 'left'|'right' — for lateral view, only analyse this side
  * @returns {{ findings: Array, worstSeverity: string, hasFindings: boolean }}
  */
 export function detectCompensations(
@@ -111,6 +112,7 @@ export function detectCompensations(
   cameraAngle = 'anterior',
   thresholds = null,
   screenType = '',
+  lateralSide = null,
 ) {
   const t = thresholds ?? getThresholds();
   const findings = [];
@@ -205,6 +207,14 @@ export function detectCompensations(
   // SAGITTAL-PLANE CHECKS  (lateral camera only)
   // =========================================================
   if (isLateral) {
+
+    // When a lateralSide is specified, null out the far side's per-leg data so
+    // only the near (visible) leg contributes to tibial angle and DF checks.
+    if (lateralSide === 'left') {
+      angles = { ...angles, tibialAngleRight: null, rightAnkleDorsiflexion: null };
+    } else if (lateralSide === 'right') {
+      angles = { ...angles, tibialAngleLeft: null, leftAnkleDorsiflexion: null };
+    }
 
     // 6. Excessive forward trunk lean
     if (angles.trunkLeanDegrees != null) {
@@ -364,8 +374,10 @@ export function detectCompensations(
       }
     }
 
-    // 12. Tibial bilateral asymmetry (lateral)
-    checkBilateralAsymmetry(findings, t, 'Tibial Inclination', angles.tibialAngleLeft, angles.tibialAngleRight);
+    // 12. Tibial bilateral asymmetry (lateral) — skip when a single side is selected
+    if (!lateralSide) {
+      checkBilateralAsymmetry(findings, t, 'Tibial Inclination', angles.tibialAngleLeft, angles.tibialAngleRight);
+    }
   }
 
   // ---------------------------------------------------------------------------

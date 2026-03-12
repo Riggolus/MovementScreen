@@ -121,6 +121,15 @@
         </div>
       </div>
 
+      <div id="lateral-side-options" class="lateral-side-options card hidden">
+        <h2 class="card-title">Which side is closest to the camera?</h2>
+        <p class="lateral-side-desc">Only that leg's data will be used — the far leg is unreliable from a side-on view.</p>
+        <div class="toggle-group">
+          <button class="toggle-btn active" data-side="left">Left</button>
+          <button class="toggle-btn" data-side="right">Right</button>
+        </div>
+      </div>
+
       <div class="card">
         <h2 class="card-title">Camera angle</h2>
         <div class="angle-selector">
@@ -186,9 +195,13 @@
       <div class="camera-wrap">
         <video id="preview" autoplay muted playsinline></video>
         <canvas id="skeleton-canvas"></canvas>
-        <div id="countdown-overlay" class="countdown-overlay hidden">
-          <div id="countdown-num" class="countdown-num">5</div>
-          <p class="countdown-label">Get into position</p>
+        <div id="position-overlay" class="position-overlay hidden">
+          <p id="position-message" class="position-message">Waiting for pose…</p>
+          <div class="position-progress-wrap">
+            <div id="position-bar" class="position-bar"></div>
+          </div>
+          <p id="position-hint" class="position-hint">Hold still to begin</p>
+          <button id="position-skip-btn" class="position-skip-btn">Start anyway</button>
         </div>
         <div class="camera-ui">
           <div class="rec-indicator">
