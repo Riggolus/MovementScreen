@@ -61,6 +61,15 @@ let isRecording        = false;
 let isPositioning      = false;
 let positionGoodFrames = 0;
 const POSITION_HOLD_FRAMES = 45; // ~1.5 s at 30 fps
+
+// Auto-stop: if body fills >92% of frame for 20 consecutive frames after
+// at least 60 recording frames (~2 s), the patient walked toward the camera.
+let recordingFrameCount = 0;
+let walkTowardFrames    = 0;
+const WALK_TOWARD_THRESHOLD = 0.92;
+const WALK_TOWARD_FRAMES    = 20;
+const MIN_FRAMES_BEFORE_AUTOSTOP = 60;
+
 let aggregator     = null;
 let timerInterval  = null;
 let secondsElapsed = 0;
@@ -290,8 +299,19 @@ async function startRecording() {
   }
 }
 
+function getBodyH(lms) {
+  const shoulderYs = [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER]
+    .filter(i => lms[i].visibility > 0.5).map(i => lms[i].y);
+  const ankleYs = [LM.LEFT_ANKLE, LM.RIGHT_ANKLE]
+    .filter(i => lms[i].visibility > 0.5).map(i => lms[i].y);
+  if (!shoulderYs.length || !ankleYs.length) return 0;
+  return Math.max(...ankleYs) - Math.min(...shoulderYs);
+}
+
 function beginRecording() {
   isPositioning = false;
+  recordingFrameCount = 0;
+  walkTowardFrames = 0;
   document.getElementById('position-overlay').classList.add('hidden');
   isRecording = true;
   startTimer();
@@ -351,6 +371,20 @@ function startSkeletonLoop() {
               setPositionOverlay(guidance, 0);
             }
           } else if (isRecording && aggregator) {
+            recordingFrameCount++;
+
+            // Auto-stop: patient walked toward camera after exercise
+            const bodyH = getBodyH(lms);
+            if (recordingFrameCount > MIN_FRAMES_BEFORE_AUTOSTOP && bodyH > WALK_TOWARD_THRESHOLD) {
+              walkTowardFrames++;
+              if (walkTowardFrames >= WALK_TOWARD_FRAMES) {
+                stopRecording();
+                return;
+              }
+            } else {
+              walkTowardFrames = 0;
+            }
+
             let atDepth = false;
             if (currentScreen === 'squat')         atDepth = acceptFrameSquat(lms, currentAngle, currentLateralSide);
             else if (currentScreen === 'lunge')    atDepth = acceptFrameLunge(lms, currentAngle, currentSide);
@@ -388,8 +422,8 @@ function stopRecording() {
 }
 
 document.getElementById('cancel-btn').addEventListener('click', () => {
-  isPositioning = false;
-  positionGoodFrames = 0;
+  isPositioning = false; positionGoodFrames = 0;
+  recordingFrameCount = 0; walkTowardFrames = 0;
   stopTimer(); stopSkeletonLoop();
   isRecording = false;
   mediaStream?.getTracks().forEach(t => t.stop());
