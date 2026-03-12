@@ -63,18 +63,29 @@ body {
 }
 .logo {
   display: flex; align-items: center; gap: 10px;
-  font-weight: 700; font-size: 17px; letter-spacing: -.3px; color: var(--primary);
+  font-weight: 700; font-size: 16px; letter-spacing: -.4px; color: var(--text);
 }
-.header-nav { display: flex; align-items: center; gap: 8px; }
+/* Minimal two-bar motion mark */
+.logo-mark {
+  width: 20px; height: 16px; position: relative; flex-shrink: 0;
+}
+.logo-mark::before, .logo-mark::after {
+  content: ''; position: absolute; left: 0; height: 2.5px;
+  background: var(--primary); border-radius: 2px;
+}
+.logo-mark::before { width: 100%; top: 2px; }
+.logo-mark::after  { width: 65%; top: 10px; }
+
+.header-nav { display: flex; align-items: center; gap: 4px; }
 .nav-btn {
   display: flex; align-items: center; gap: 6px;
-  padding: 7px 12px; border-radius: 50px;
-  border: 1px solid var(--border); background: var(--surface-2);
-  font-size: 13px; font-weight: 500; color: var(--text-2);
+  padding: 7px 11px; border-radius: 8px;
+  border: none; background: transparent;
+  font-size: 13px; font-weight: 500; color: var(--text-3);
   cursor: pointer; transition: all .15s;
 }
-.nav-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-glow); }
-.nav-btn.danger:hover { border-color: var(--severe); color: var(--severe); background: rgba(239,68,68,.08); }
+.nav-btn:hover { color: var(--text); background: var(--surface-2); }
+.nav-btn.danger:hover { color: var(--severe); background: rgba(239,68,68,.06); }
 .user-chip {
   padding: 6px 14px; border-radius: 50px;
   background: var(--primary-glow); border: 1px solid var(--primary);
@@ -94,8 +105,18 @@ body {
 }
 .auth-logo {
   text-align: center; margin-bottom: 28px;
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
 }
+/* Auth page logo mark — horizontal bars, larger */
+.auth-logo-mark {
+  width: 36px; height: 28px; position: relative;
+}
+.auth-logo-mark::before, .auth-logo-mark::after {
+  content: ''; position: absolute; left: 0; height: 4px;
+  background: var(--primary); border-radius: 3px;
+}
+.auth-logo-mark::before { width: 100%; top: 3px; }
+.auth-logo-mark::after  { width: 60%; top: 17px; }
 .auth-logo h1 { font-size: 24px; font-weight: 800; letter-spacing: -.4px; }
 .auth-logo p  { font-size: 15px; color: var(--text-2); }
 .auth-card { width: 100%; max-width: 400px; padding: 28px 24px; }
@@ -199,9 +220,15 @@ body {
 .angle-desc   { font-size: 11px; color: var(--text-3); line-height: 1.3; }
 
 /* ── Tips Card ─────────────────────────────────────────── */
-.tips-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.tips-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
 .tips-list li { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; color: var(--text-2); line-height: 1.5; }
-.tip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.tip-icon {
+  flex-shrink: 0; margin-top: 2px;
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--primary);
+}
 
 /* ── Primary Button ────────────────────────────────────── */
 .btn-primary {
@@ -304,8 +331,11 @@ body {
 .finding-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .severity-badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 3px 9px; border-radius: 50px; color: white; flex-shrink: 0; }
 .finding-name   { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
-.finding-desc   { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 6px; }
+.finding-desc   { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 8px; }
 .finding-metric { font-size: 12px; color: var(--text-3); }
+.finding-what   { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 8px; }
+.finding-tips   { margin: 0; padding-left: 18px; }
+.finding-tips li { font-size: 13px; color: var(--text-2); line-height: 1.6; margin-bottom: 3px; }
 .no-findings {
   background: linear-gradient(135deg, rgba(16,185,129,.08) 0%, rgba(16,185,129,.04) 100%);
   border: 1px solid rgba(16,185,129,.25); border-radius: var(--r); padding: 28px 20px; text-align: center;
@@ -320,6 +350,34 @@ body {
 .stat-label  { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .4px; color: var(--text-3); }
 .stat-value  { font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -.4px; }
 .stat-item.main .stat-value { font-size: 20px; color: var(--primary); }
+/* Results summary card */
+.results-summary-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 16px 18px; margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+}
+.results-summary-text { font-size: 14px; color: var(--text-2); line-height: 1.65; margin: 0; }
+
+/* Biomechanical measurements collapsible */
+.bio-details {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); margin-bottom: 20px; overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.bio-summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 16px; cursor: pointer; user-select: none;
+  font-size: 13px; font-weight: 600; color: var(--text-2);
+  list-style: none;
+}
+.bio-summary::-webkit-details-marker { display: none; }
+.bio-summary svg:first-child { color: var(--primary); flex-shrink: 0; }
+.bio-chevron { margin-left: auto; transition: transform .2s; flex-shrink: 0; }
+.bio-details[open] .bio-chevron { transform: rotate(180deg); }
+.bio-body { padding: 0 16px 16px; border-top: 1px solid var(--border); padding-top: 16px; }
+.bio-intro { font-size: 12px; color: var(--text-3); margin-bottom: 14px; line-height: 1.5; }
+.calib-section { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
+
 .again-btn-wrap { padding-top: 24px; }
 .results-actions { display: flex; flex-direction: column; gap: 10px; padding-top: 24px; }
 
@@ -568,10 +626,19 @@ body {
   padding: 28px 0 20px;
 }
 .report-logo-row {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
   color: var(--primary); margin-bottom: 6px;
 }
 .report-logo-row span { font-size: 18px; font-weight: 800; letter-spacing: -.5px; }
+.report-logo-mark {
+  width: 22px; height: 17px; position: relative; flex-shrink: 0;
+}
+.report-logo-mark::before, .report-logo-mark::after {
+  content: ''; position: absolute; left: 0; height: 3px;
+  background: var(--primary); border-radius: 2px;
+}
+.report-logo-mark::before { width: 100%; top: 2px; }
+.report-logo-mark::after  { width: 62%; top: 11px; }
 .report-masthead h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
 .report-masthead p  { font-size: 13px; color: var(--text-3); }
 

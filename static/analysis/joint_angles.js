@@ -308,9 +308,13 @@ export function computeJointAngles(landmarks) {
             const expectedX = hip[0] + t * (ankle[0] - hip[0]);
             let deviation;
             if (side === 'left') {
-              deviation = (knee[0] - expectedX) / hipWidth;
-            } else {
+              // Left knee is on the RIGHT side of the image (large x).
+              // Valgus = knee moves toward centre = x decreases = expectedX - knee[0] > 0.
               deviation = (expectedX - knee[0]) / hipWidth;
+            } else {
+              // Right knee is on the LEFT side of the image (small x).
+              // Valgus = knee moves toward centre = x increases = knee[0] - expectedX > 0.
+              deviation = (knee[0] - expectedX) / hipWidth;
             }
             if (side === 'left') {
               angles.leftKneeFrontalAngle = deviation;

@@ -97,11 +97,12 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
   tibial_angle_f: 18.0,
 
   // Pelvic tilt from horizontal — anterior view (higher is worse)
-  pelvic_tilt_b: 2.0,
-  pelvic_tilt_c: 3.0,
-  pelvic_tilt_d: 6.0,
-  pelvic_tilt_e: 8.0,
-  pelvic_tilt_f: 10.0,
+  // 2D landmark noise at typical resolutions is ~1-3°, so Grade B starts at 5°.
+  pelvic_tilt_b: 5.0,
+  pelvic_tilt_c: 7.0,
+  pelvic_tilt_d: 10.0,
+  pelvic_tilt_e: 13.0,
+  pelvic_tilt_f: 16.0,
 });
 
 // ---------------------------------------------------------------------------
@@ -177,7 +178,7 @@ export const THRESHOLD_DESCRIPTIONS = Object.freeze({
   tibial_angle_e: 'Tibial angle (\u00b0) \u2264 which Grade E dorsiflexion restriction is flagged',
   tibial_angle_f: 'Tibial angle (\u00b0) \u2264 which Grade F dorsiflexion restriction is flagged',
   // Pelvic tilt (anterior view)
-  pelvic_tilt_b: 'Pelvic tilt (\u00b0) \u2265 which Grade B hip-level asymmetry is flagged',
+  pelvic_tilt_b: 'Pelvic tilt (\u00b0) \u2265 which Grade B hip-level asymmetry is flagged (landmark noise floor ~3\u00b0)',
   pelvic_tilt_c: 'Pelvic tilt (\u00b0) \u2265 which Grade C hip-level asymmetry is flagged',
   pelvic_tilt_d: 'Pelvic tilt (\u00b0) \u2265 which Grade D hip-level asymmetry is flagged',
   pelvic_tilt_e: 'Pelvic tilt (\u00b0) \u2265 which Grade E hip-level asymmetry is flagged',

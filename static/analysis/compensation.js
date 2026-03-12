@@ -195,29 +195,7 @@ export function detectCompensations(
       }
     }
 
-    // 4. Lateral spinal flexion (arctan of horizontal/vertical trunk offset)
-    //    Only valid from frontal view. Higher abs = worse.
-    if (angles.lateralFlexionDegrees != null) {
-      const lflex = Math.abs(angles.lateralFlexionDegrees);
-      const sev = gradeFromThresholds(
-        lflex,
-        t.lateral_flexion_b, t.lateral_flexion_c, t.lateral_flexion_d,
-        t.lateral_flexion_e, t.lateral_flexion_f,
-        false,
-      );
-      if (sev !== 'A' && angles.lateralTrunkShift != null) {
-        const direction = angles.lateralTrunkShift > 0 ? 'right' : 'left';
-        findings.push({
-          name: `Lateral Spinal Flexion (${direction})`,
-          severity: sev,
-          description: `trunk tilting laterally toward the ${direction}`,
-          metricValue: Math.round(lflex * 10) / 10,
-          metricLabel: 'lateral flexion (deg)',
-        });
-      }
-    }
-
-    // 5. Bilateral symmetry (L vs R) — only valid from a frontal camera
+    // 4. Bilateral symmetry (L vs R) — only valid from a frontal camera
     checkBilateralAsymmetry(findings, t, 'Knee Flexion',     angles.leftKneeFlexion,     angles.rightKneeFlexion);
     checkBilateralAsymmetry(findings, t, 'Hip Flexion',      angles.leftHipFlexion,      angles.rightHipFlexion);
     checkBilateralAsymmetry(findings, t, 'Shoulder Flexion', angles.leftShoulderFlexion, angles.rightShoulderFlexion);
