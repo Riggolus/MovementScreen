@@ -125,6 +125,17 @@ export function detectCompensations(
   // =========================================================
   if (isFrontal) {
 
+    // Posterior view: person faces away so the image is NOT mirrored left-right.
+    // The valgus deviation was computed assuming anterior (person faces camera),
+    // so the sign is inverted for posterior — negate to restore correct polarity.
+    if (cameraAngle === 'posterior') {
+      angles = {
+        ...angles,
+        leftKneeFrontalAngle:  angles.leftKneeFrontalAngle  != null ? -angles.leftKneeFrontalAngle  : null,
+        rightKneeFrontalAngle: angles.rightKneeFrontalAngle != null ? -angles.rightKneeFrontalAngle : null,
+      };
+    }
+
     // 1. Knee valgus (frontal plane collapse)
     //    Positive deviation = knee medial to hip-ankle line = valgus.
     //    Higher deviation = worse.
