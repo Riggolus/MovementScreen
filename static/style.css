@@ -864,3 +864,50 @@ body {
   .camera-wrap { aspect-ratio: 4/3; max-height: calc(100dvh - var(--header-h) - 160px); }
   .stats-grid { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ── 3D capture: phase indicator ────────────────────────── */
+.phase-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  background: rgba(0,0,0,.45);
+  border-radius: 20px;
+  align-self: center;
+}
+.phase-dots {
+  display: flex;
+  gap: 5px;
+}
+.phase-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.3);
+  transition: background .2s;
+}
+.phase-dot.active { background: #fff; }
+.phase-dot.done   { background: var(--primary); }
+.phase-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: .3px;
+}
+
+/* ── 3D capture: Next/Finish button ─────────────────────── */
+.btn-next-angle {
+  padding: 0 22px;
+  height: 52px;
+  border-radius: 26px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  letter-spacing: .3px;
+  transition: background .15s, transform .1s;
+}
+.btn-next-angle:active { transform: scale(.96); background: var(--primary-dark); }

@@ -87,7 +87,7 @@
       </div>
 
       <div class="screen-list">
-        <button class="screen-row active" data-screen="squat">
+        <button class="screen-row" data-screen="squat">
           <span class="screen-row-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M12 6v6l-3 4M12 12l3 4M9 10h6"/></svg>
           </span>
@@ -130,7 +130,7 @@
       </div>
 
       <!-- Options panel — slides open when an assessment is selected -->
-      <div id="setup-options" class="setup-options open">
+      <div id="setup-options" class="setup-options">
 
         <div id="angle-option-group" class="option-group">
           <p class="option-label">Camera angle</p>
@@ -155,6 +155,13 @@
               </span>
               <span class="angle-label">Posterior</span>
               <span class="angle-desc">Back to camera</span>
+            </button>
+            <button class="angle-btn angle-btn-3d" data-angle="3d">
+              <span class="angle-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </span>
+              <span class="angle-label">Full 3D</span>
+              <span class="angle-desc">All 4 angles</span>
             </button>
           </div>
         </div>
@@ -205,6 +212,10 @@
             <span id="timer">0:00</span>
           </div>
           <div id="pose-status" class="pose-status">Waiting for pose…</div>
+          <div id="phase-indicator" class="phase-indicator hidden">
+            <div id="phase-dots" class="phase-dots"></div>
+            <span id="phase-label" class="phase-label"></span>
+          </div>
         </div>
       </div>
       <div class="recording-controls">
@@ -213,6 +224,7 @@
           <span>Flip</span>
         </button>
         <button id="stop-btn" class="btn-stop"><span class="stop-square"></span></button>
+        <button id="next-angle-btn" class="btn-next-angle hidden">Next →</button>
         <button id="cancel-btn" class="btn-ghost">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           <span>Cancel</span>

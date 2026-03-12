@@ -76,6 +76,19 @@ let aggregator     = null;
 let timerInterval  = null;
 let secondsElapsed = 0;
 
+// ── 3D capture state ──────────────────────────────────────
+let is3D           = false;
+let phase3DIndex   = 0;
+const PHASES_3D    = [
+  { angle: 'anterior',  lateralSide: null,    label: 'Anterior',     turnMsg: 'Now turn 90° — right side toward camera' },
+  { angle: 'lateral',   lateralSide: 'right', label: 'Lateral (R)',  turnMsg: 'Now turn to face away from the camera' },
+  { angle: 'posterior', lateralSide: null,    label: 'Posterior',    turnMsg: 'Now turn 90° — left side toward camera' },
+  { angle: 'lateral',   lateralSide: 'left',  label: 'Lateral (L)',  turnMsg: null },
+];
+let aggregators3D  = []; // { aggregator, phase } for completed phases
+let phase3DFrames  = 0;
+const MIN_3D_PHASE_FRAMES = 20;
+
 // ── DOM refs ─────────────────────────────────────────────
 const views = {
   auth:       document.getElementById('view-auth'),
@@ -97,6 +110,10 @@ const lateralSideOptions  = document.getElementById('lateral-side-options');
 const setupOptions        = document.getElementById('setup-options');
 const poseStatus     = document.getElementById('pose-status');
 const headerNav      = document.getElementById('header-nav');
+const nextAngleBtn   = document.getElementById('next-angle-btn');
+const phaseIndicator = document.getElementById('phase-indicator');
+const phaseDots      = document.getElementById('phase-dots');
+const phaseLabel     = document.getElementById('phase-label');
 
 // ── View helpers ─────────────────────────────────────────
 function showView(name) {
@@ -202,14 +219,22 @@ document.querySelectorAll('.screen-row').forEach(btn => {
     currentScreen = btn.dataset.screen;
 
     const isGait = currentScreen === 'gait';
-    if (isGait) currentAngle = 'lateral'; // gait is always lateral
+    if (isGait) {
+      currentAngle = 'lateral';
+      is3D = false;
+    } else if (is3D) {
+      // keep 3D selection
+    }
 
     // Show/hide camera angle picker (hidden for gait — always lateral)
     if (angleOptionGroup) angleOptionGroup.classList.toggle('hidden', isGait);
 
+    // Hide Full 3D option for gait (walk-past doesn't support 3D rotation)
+    document.querySelectorAll('.angle-btn-3d').forEach(b => b.classList.toggle('hidden', isGait));
+
     lungeOptions.classList.toggle('hidden', currentScreen !== 'lunge');
-    // Show lateral-side selector for gait and for lateral squat/lunge
-    lateralSideOptions.classList.toggle('hidden', !isGait && currentAngle !== 'lateral');
+    // Show lateral-side selector for lateral squat/lunge (not for gait or 3D)
+    lateralSideOptions.classList.toggle('hidden', isGait || is3D || currentAngle !== 'lateral');
     setupOptions.classList.add('open');
     renderInstructions(currentScreen, currentLateralSide);
   });
@@ -220,7 +245,9 @@ document.querySelectorAll('.angle-btn').forEach(btn => {
     document.querySelectorAll('.angle-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentAngle = btn.dataset.angle;
-    lateralSideOptions.classList.toggle('hidden', currentAngle !== 'lateral');
+    is3D = currentAngle === '3d';
+    // For 3D, the first phase starts at anterior — hide lateral side picker
+    lateralSideOptions.classList.toggle('hidden', is3D || currentAngle !== 'lateral');
     lungeOptions.classList.toggle('hidden', currentScreen !== 'lunge');
   });
 });
@@ -242,8 +269,7 @@ document.querySelectorAll('.lateral-side-options .toggle-btn').forEach(btn => {
   });
 });
 
-// Initialise instructions on load
-renderInstructions('squat', currentLateralSide);
+// Instructions render only when an assessment is selected (no pre-selection on load)
 
 // ── Position check ────────────────────────────────────────
 // Key landmark indices needed per camera angle
@@ -315,9 +341,22 @@ async function startRecording() {
   skeletonCanvas.style.transform = mirrored ? 'scaleX(-1)' : '';
 
   const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Forward Lunge', overhead: 'Overhead Reach', gait: 'Gait Analysis' };
-  aggregator = currentScreen === 'gait'
-    ? createGaitAggregator(SCREEN_NAMES[currentScreen])
-    : createAggregator(SCREEN_NAMES[currentScreen] || currentScreen);
+
+  // Initialise 3D or single-angle mode
+  if (is3D) {
+    phase3DIndex  = 0;
+    aggregators3D = [];
+    phase3DFrames = 0;
+    // Set angle/side to match first phase
+    currentAngle       = PHASES_3D[0].angle;
+    currentLateralSide = PHASES_3D[0].lateralSide ?? currentLateralSide;
+    aggregator = createAggregator(SCREEN_NAMES[currentScreen] || currentScreen);
+    updatePhaseIndicator();
+  } else {
+    aggregator = currentScreen === 'gait'
+      ? createGaitAggregator(SCREEN_NAMES[currentScreen])
+      : createAggregator(SCREEN_NAMES[currentScreen] || currentScreen);
+  }
 
   isPositioning = true;
   positionGoodFrames = 0;
@@ -342,12 +381,68 @@ function beginRecording() {
   isPositioning = false;
   recordingFrameCount = 0;
   walkTowardFrames = 0;
+  phase3DFrames = 0;
   document.getElementById('position-overlay').classList.add('hidden');
+  nextAngleBtn.classList.add('hidden'); // hidden until minimum frames collected
   isRecording = true;
   startTimer();
 }
 
 document.getElementById('position-skip-btn').addEventListener('click', beginRecording);
+
+// ── 3D phase helpers ──────────────────────────────────────
+
+function updatePhaseIndicator() {
+  if (!is3D) { phaseIndicator.classList.add('hidden'); return; }
+  phaseIndicator.classList.remove('hidden');
+  phaseLabel.textContent = PHASES_3D[phase3DIndex].label;
+  phaseDots.innerHTML = PHASES_3D.map((_, i) =>
+    `<span class="phase-dot ${i < phase3DIndex ? 'done' : i === phase3DIndex ? 'active' : ''}"></span>`
+  ).join('');
+}
+
+function nextAngle() {
+  // Save the completed phase aggregator
+  aggregators3D.push({ aggregator, phase: PHASES_3D[phase3DIndex] });
+
+  const isLastPhase = phase3DIndex >= PHASES_3D.length - 1;
+  if (isLastPhase) {
+    // Finalize all phases
+    stopTimer();
+    stopSkeletonLoop();
+    isRecording = false;
+    mediaStream?.getTracks().forEach(t => t.stop());
+    nextAngleBtn.classList.add('hidden');
+    phaseIndicator.classList.add('hidden');
+    showView('processing');
+    analyseLocally();
+    return;
+  }
+
+  // Advance to next phase
+  phase3DIndex++;
+  const phase = PHASES_3D[phase3DIndex];
+  currentAngle       = phase.angle;
+  currentLateralSide = phase.lateralSide ?? currentLateralSide;
+
+  // Create aggregator for new phase
+  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Forward Lunge', overhead: 'Overhead Reach' };
+  aggregator = createAggregator(SCREEN_NAMES[currentScreen] || currentScreen);
+
+  // Transition: stop recording, restart positioning for new angle
+  isRecording    = false;
+  isPositioning  = true;
+  positionGoodFrames = 0;
+  phase3DFrames  = 0;
+  nextAngleBtn.classList.add('hidden');
+  updatePhaseIndicator();
+
+  // Show turn instruction in overlay
+  const prevPhase = PHASES_3D[phase3DIndex - 1];
+  setPositionOverlay(`✓ ${prevPhase.label} done — ${phase.turnMsg}`, 0);
+}
+
+nextAngleBtn.addEventListener('click', nextAngle);
 
 function setPositionOverlay(msg, progress) {
   document.getElementById('position-overlay').classList.remove('hidden');
@@ -417,13 +512,20 @@ function startSkeletonLoop() {
 
             if (currentScreen === 'gait') {
               const { inFrame, relAnkleY } = acceptFrameGait(lms, currentLateralSide);
-              if (inFrame) aggregator.addFrame(computeJointAngles(lms), relAnkleY);
+              if (inFrame) { aggregator.addFrame(computeJointAngles(lms), relAnkleY); phase3DFrames++; }
             } else {
               let atDepth = false;
               if (currentScreen === 'squat')         atDepth = acceptFrameSquat(lms, currentAngle, currentLateralSide);
               else if (currentScreen === 'lunge')    atDepth = acceptFrameLunge(lms, currentAngle, currentSide);
               else if (currentScreen === 'overhead') atDepth = acceptFrameOverhead(lms);
-              if (atDepth) aggregator.addFrame(computeJointAngles(lms));
+              if (atDepth) { aggregator.addFrame(computeJointAngles(lms)); phase3DFrames++; }
+            }
+
+            // 3D mode: reveal Next/Finish button once minimum frames collected
+            if (is3D && phase3DFrames >= MIN_3D_PHASE_FRAMES) {
+              const isLastPhase = phase3DIndex >= PHASES_3D.length - 1;
+              nextAngleBtn.textContent = isLastPhase ? 'Finish ✓' : 'Next →';
+              nextAngleBtn.classList.remove('hidden');
             }
           }
         } else {
@@ -451,7 +553,13 @@ document.getElementById('stop-btn').addEventListener('click', stopRecording);
 function stopRecording() {
   stopTimer(); stopSkeletonLoop();
   isRecording = false;
-  mediaStream.getTracks().forEach(t => t.stop());
+  nextAngleBtn.classList.add('hidden');
+  phaseIndicator.classList.add('hidden');
+  // In 3D mode: save current phase aggregator then finalize all
+  if (is3D && aggregator) {
+    aggregators3D.push({ aggregator, phase: PHASES_3D[phase3DIndex] });
+  }
+  mediaStream?.getTracks().forEach(t => t.stop());
   showView('processing');
   analyseLocally();
 }
@@ -459,8 +567,11 @@ function stopRecording() {
 document.getElementById('cancel-btn').addEventListener('click', () => {
   isPositioning = false; positionGoodFrames = 0;
   recordingFrameCount = 0; walkTowardFrames = 0;
+  phase3DFrames = 0; aggregators3D = [];
   stopTimer(); stopSkeletonLoop();
   isRecording = false;
+  nextAngleBtn.classList.add('hidden');
+  phaseIndicator.classList.add('hidden');
   mediaStream?.getTracks().forEach(t => t.stop());
   showView('setup');
 });
@@ -493,14 +604,55 @@ function updateTimerDisplay() {
 }
 
 // ── Local analysis + sync ─────────────────────────────────
+function merge3DResults(phaseResults, screenType) {
+  const GRADE_ORDER = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5 };
+  const findings = [];
+  let worstSeverity = 'A';
+  let frameCount = 0;
+  const stats = [];
+  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Forward Lunge', overhead: 'Overhead Reach' };
+
+  for (const r of phaseResults) {
+    frameCount += r.frame_count;
+    for (const s of (r.stats ?? [])) stats.push(s);
+    for (const f of (r.findings ?? [])) {
+      findings.push({ ...f, name: `${f.name} · ${r._phaseLabel}` });
+      if (GRADE_ORDER[f.severity] > GRADE_ORDER[worstSeverity]) worstSeverity = f.severity;
+    }
+  }
+
+  return {
+    screen_name:    SCREEN_NAMES[screenType] ?? screenType,
+    screen_type:    screenType,
+    camera_angle:   '3d',
+    frame_count:    frameCount,
+    worst_severity: worstSeverity,
+    has_findings:   findings.length > 0,
+    findings,
+    stats,
+    is_3d:          true,
+    saved:          false,
+  };
+}
+
 async function analyseLocally() {
-  if (!aggregator) { showError('No recording data found. Please try again.'); return; }
   try {
     let result;
-    if (currentScreen === 'gait') {
+    if (is3D && aggregators3D.length > 0) {
+      // Finalize each phase and merge
+      const results = aggregators3D.map(({ aggregator: agg, phase }) => {
+        const lateralSide = phase.angle === 'lateral' ? phase.lateralSide : null;
+        const r = agg.finalize(phase.angle, currentScreen, getThresholds(), lateralSide);
+        r._phaseLabel = phase.label;
+        return r;
+      });
+      result = merge3DResults(results, currentScreen);
+    } else if (currentScreen === 'gait') {
+      if (!aggregator) { showError('No recording data found. Please try again.'); return; }
       result = aggregator.finalize(currentLateralSide, getThresholds());
       if ((result.step_count ?? 0) < 2) result.depth_warning = true;
     } else {
+      if (!aggregator) { showError('No recording data found. Please try again.'); return; }
       const lateralSide = (currentAngle === 'lateral' && currentScreen === 'squat') ? currentLateralSide : null;
       result = aggregator.finalize(currentAngle, currentScreen, getThresholds(), lateralSide);
       if (result.frame_count < 5) result.depth_warning = true;
@@ -541,7 +693,7 @@ const SEV_EMOJI  = {
   A: 'A', B: 'B', C: 'C', D: 'D', E: 'E', F: 'F',
   none: 'A', mild: 'C', moderate: 'D', severe: 'F',
 };
-const ANGLE_LABEL = { anterior: 'Anterior', lateral: 'Lateral', posterior: 'Posterior' };
+const ANGLE_LABEL = { anterior: 'Anterior', lateral: 'Lateral', posterior: 'Posterior', '3d': 'Full 3D' };
 
 function renderResults(data) {
   const sev = data.worst_severity, color = SEV_COLOR[sev];
@@ -909,7 +1061,11 @@ function showError(msg) {
 }
 
 // ── Reset ─────────────────────────────────────────────────
-function resetApp() { aggregator = null; isRecording = false; showView('setup'); }
+function resetApp() {
+  aggregator = null; isRecording = false;
+  is3D = false; phase3DIndex = 0; aggregators3D = []; phase3DFrames = 0;
+  showView('setup');
+}
 
 // ── Admin threshold page ──────────────────────────────────
 
