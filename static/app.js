@@ -232,9 +232,15 @@ document.querySelectorAll('.screen-row').forEach(btn => {
     currentScreen = btn.dataset.screen;
 
     const isGait = currentScreen === 'gait';
+    is3D = false;
     if (isGait) {
       currentAngle = 'lateral';
-      is3D = false;
+      // Reset angle buttons to lateral for gait
+      document.querySelectorAll('.angle-btn').forEach(b => b.classList.toggle('active', b.dataset.angle === 'lateral'));
+    } else if (currentAngle === '3d') {
+      // Was on 3D — reset to anterior since 3D was cleared
+      currentAngle = 'anterior';
+      document.querySelectorAll('.angle-btn').forEach(b => b.classList.toggle('active', b.dataset.angle === 'anterior'));
     }
 
     if (angleOptionGroup) angleOptionGroup.classList.toggle('hidden', isGait);
