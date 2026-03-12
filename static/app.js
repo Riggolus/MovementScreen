@@ -24,6 +24,7 @@ import {
   saveAssessment,
   getAssessments,
   getAssessment,
+  deleteAssessment,
 } from './db/local_db.js';
 
 // ── MediaPipe ────────────────────────────────────────────
@@ -92,6 +93,7 @@ const skeletonCtx    = skeletonCanvas.getContext('2d');
 const timerEl        = document.getElementById('timer');
 const lungeOptions        = document.getElementById('lunge-options');
 const lateralSideOptions  = document.getElementById('lateral-side-options');
+const setupOptions        = document.getElementById('setup-options');
 const poseStatus     = document.getElementById('pose-status');
 const headerNav      = document.getElementById('header-nav');
 
@@ -178,12 +180,14 @@ function renderInstructions(screen, side) {
 }
 
 // ── Screen / angle / side selectors ──────────────────────
-document.querySelectorAll('.screen-btn').forEach(btn => {
+document.querySelectorAll('.screen-row').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.screen-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.screen-row').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentScreen = btn.dataset.screen;
     lungeOptions.classList.toggle('hidden', currentScreen !== 'lunge');
+    lateralSideOptions.classList.toggle('hidden', currentAngle !== 'lateral');
+    setupOptions.classList.add('open');
     renderInstructions(currentScreen, currentSide);
   });
 });
@@ -194,6 +198,7 @@ document.querySelectorAll('.angle-btn').forEach(btn => {
     btn.classList.add('active');
     currentAngle = btn.dataset.angle;
     lateralSideOptions.classList.toggle('hidden', currentAngle !== 'lateral');
+    lungeOptions.classList.toggle('hidden', currentScreen !== 'lunge');
   });
 });
 
@@ -703,6 +708,9 @@ function renderHistory(assessments, byScreen) {
               <div class="assessment-date">${date}</div>
             </div>
             <span class="assessment-sev-pill" style="background:${color}">${SEV_LABEL[a.worst_severity]}</span>
+            <button class="delete-btn" data-delete-id="${a.id}" title="Delete assessment" aria-label="Delete assessment">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
           </div>
           <div class="assessment-body" id="body-${a.id}"></div>
         </div>
@@ -722,6 +730,31 @@ function renderHistory(assessments, byScreen) {
 
   views.history.innerHTML = html;
   document.getElementById('new-assessment-btn').addEventListener('click', resetApp);
+
+  // Delete buttons — tap once to arm, tap again within 3s to confirm
+  const deleteTimers = new Map();
+  document.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation(); // don't expand the card
+      const id = parseInt(btn.dataset.deleteId, 10);
+      if (deleteTimers.has(id)) {
+        // Second tap — confirmed
+        clearTimeout(deleteTimers.get(id));
+        deleteTimers.delete(id);
+        btn.classList.remove('armed');
+        await deleteAssessment(id);
+        loadHistory();
+      } else {
+        // First tap — arm it
+        btn.classList.add('armed');
+        const timer = setTimeout(() => {
+          btn.classList.remove('armed');
+          deleteTimers.delete(id);
+        }, 3000);
+        deleteTimers.set(id, timer);
+      }
+    });
+  });
 
   // Draw chart
   if (hasData) {

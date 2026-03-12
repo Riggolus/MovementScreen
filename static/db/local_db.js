@@ -163,6 +163,27 @@ export function getAssessment(id) {
 }
 
 // ---------------------------------------------------------------------------
+// deleteAssessment
+// ---------------------------------------------------------------------------
+
+/**
+ * Delete a single assessment by id.
+ *
+ * @param {number} id
+ * @returns {Promise<void>}
+ */
+export function deleteAssessment(id) {
+  return openDB().then((db) => {
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction('assessments', 'readwrite');
+      const req = tx.objectStore('assessments').delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror   = (event) => reject(event.target.error);
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // markSynced
 // ---------------------------------------------------------------------------
 
