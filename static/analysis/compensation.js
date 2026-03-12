@@ -198,12 +198,16 @@ export function detectCompensations(
     }
 
     // 4. Bilateral symmetry (L vs R) — only valid from a frontal camera
-    // NOTE: Knee flexion is intentionally excluded here. From the anterior view,
-    // angleBetween(hip, knee, ankle) in 2D conflates sagittal depth, foot-turn
-    // angle, and frontal valgus/varus — making left-vs-right comparisons
-    // unreliable and prone to false positives.
-    checkBilateralAsymmetry(findings, t, 'Hip Flexion',      angles.leftHipFlexion,      angles.rightHipFlexion);
-    checkBilateralAsymmetry(findings, t, 'Shoulder Flexion', angles.leftShoulderFlexion, angles.rightShoulderFlexion);
+    // Hip flexion: skip for squat — 2D frontal projection of shoulder-hip-knee
+    // is too noisy to reliably detect left-vs-right depth asymmetry.
+    // Useful for lunge where one side is loaded significantly more.
+    if (screenType !== 'squat') {
+      checkBilateralAsymmetry(findings, t, 'Hip Flexion', angles.leftHipFlexion, angles.rightHipFlexion);
+    }
+    // Shoulder flexion: only meaningful for overhead reach.
+    if (screenType === 'overhead') {
+      checkBilateralAsymmetry(findings, t, 'Shoulder Flexion', angles.leftShoulderFlexion, angles.rightShoulderFlexion);
+    }
   }
 
   // =========================================================
