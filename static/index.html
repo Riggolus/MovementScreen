@@ -195,9 +195,13 @@
       <div class="camera-wrap">
         <video id="preview" autoplay muted playsinline></video>
         <canvas id="skeleton-canvas"></canvas>
-        <div id="countdown-overlay" class="countdown-overlay hidden">
-          <div id="countdown-num" class="countdown-num">5</div>
-          <p class="countdown-label">Get into position</p>
+        <div id="position-overlay" class="position-overlay hidden">
+          <p id="position-message" class="position-message">Waiting for pose…</p>
+          <div class="position-progress-wrap">
+            <div id="position-bar" class="position-bar"></div>
+          </div>
+          <p id="position-hint" class="position-hint">Hold still to begin</p>
+          <button id="position-skip-btn" class="position-skip-btn">Start anyway</button>
         </div>
         <div class="camera-ui">
           <div class="rec-indicator">

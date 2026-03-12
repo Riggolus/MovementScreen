@@ -609,28 +609,37 @@ body {
 }
 
 /* ── Countdown overlay ──────────────────────────────────── */
-.countdown-overlay {
+/* Positioning overlay (replaces countdown) */
+.position-overlay {
   position: absolute; inset: 0; z-index: 20;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: rgba(0,0,0,.55); gap: 10px;
+  background: rgba(0,0,0,.45); gap: 14px; padding: 24px;
 }
-.countdown-overlay.hidden { display: none; }
-.countdown-num {
-  font-size: 100px; font-weight: 800; color: #fff; line-height: 1;
-  text-shadow: 0 4px 24px rgba(0,0,0,.4);
+.position-overlay.hidden { display: none; }
+.position-message {
+  font-size: 26px; font-weight: 700; color: #fff; text-align: center; line-height: 1.2;
+  text-shadow: 0 2px 12px rgba(0,0,0,.5);
+  transition: opacity .2s;
 }
-.countdown-num.pop {
-  animation: cdown-pop .85s cubic-bezier(.22,.61,.36,1) forwards;
+.position-progress-wrap {
+  width: 200px; height: 5px; background: rgba(255,255,255,.25);
+  border-radius: 50px; overflow: hidden;
 }
-@keyframes cdown-pop {
-  0%   { transform: scale(1.5); opacity: .5; }
-  35%  { transform: scale(1.0); opacity: 1;  }
-  100% { transform: scale(.85); opacity: .7; }
+.position-bar {
+  height: 100%; width: 0%; background: #10b981;
+  border-radius: 50px; transition: width .12s linear;
 }
-.countdown-label {
-  font-size: 17px; color: rgba(255,255,255,.85); font-weight: 500;
-  letter-spacing: .02em;
+.position-hint {
+  font-size: 14px; color: rgba(255,255,255,.7); font-weight: 500;
+  opacity: 0; transition: opacity .3s;
 }
+.position-skip-btn {
+  margin-top: 8px; background: rgba(255,255,255,.15);
+  border: 1px solid rgba(255,255,255,.3); border-radius: 50px;
+  color: rgba(255,255,255,.8); font-size: 13px; font-weight: 500;
+  padding: 8px 20px; cursor: pointer; transition: background .15s;
+}
+.position-skip-btn:hover { background: rgba(255,255,255,.25); }
 
 /* ── Report ─────────────────────────────────────────────── */
 .report-wrap { padding-bottom: 48px; }
