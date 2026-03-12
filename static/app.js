@@ -214,29 +214,38 @@ const angleOptionGroup = document.getElementById('angle-option-group');
 
 document.querySelectorAll('.screen-row').forEach(btn => {
   btn.addEventListener('click', () => {
+    const isActive = btn.classList.contains('active');
+
+    // Collapse everything
     document.querySelectorAll('.screen-row').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.screen-item').forEach(item => item.classList.remove('active'));
+    setupOptions.classList.remove('open');
+
+    if (isActive) return; // toggled closed — done
+
+    // Expand the clicked item
     btn.classList.add('active');
+    const item = btn.closest('.screen-item');
+    item.classList.add('active');
+    item.appendChild(setupOptions); // move panel inline under this row
+
     currentScreen = btn.dataset.screen;
 
     const isGait = currentScreen === 'gait';
     if (isGait) {
       currentAngle = 'lateral';
       is3D = false;
-    } else if (is3D) {
-      // keep 3D selection
     }
 
-    // Show/hide camera angle picker (hidden for gait — always lateral)
     if (angleOptionGroup) angleOptionGroup.classList.toggle('hidden', isGait);
-
-    // Hide Full 3D option for gait (walk-past doesn't support 3D rotation)
     document.querySelectorAll('.angle-btn-3d').forEach(b => b.classList.toggle('hidden', isGait));
-
     lungeOptions.classList.toggle('hidden', currentScreen !== 'lunge');
-    // Show lateral-side selector for lateral squat/lunge (not for gait or 3D)
     lateralSideOptions.classList.toggle('hidden', isGait || is3D || currentAngle !== 'lateral');
-    setupOptions.classList.add('open');
+
     renderInstructions(currentScreen, currentLateralSide);
+
+    // Expand after the element is in its new DOM position
+    requestAnimationFrame(() => requestAnimationFrame(() => setupOptions.classList.add('open')));
   });
 });
 
