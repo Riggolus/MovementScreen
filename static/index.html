@@ -86,51 +86,63 @@
         <p>Choose an assessment to get started.</p>
       </div>
 
-      <div class="screen-list">
-        <button class="screen-row active" data-screen="squat">
-          <span class="screen-row-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M12 6v6l-3 4M12 12l3 4M9 10h6"/></svg>
-          </span>
-          <div class="screen-row-info">
-            <span class="screen-row-name">Squat</span>
-            <span class="screen-row-desc">Bilateral depth &amp; compensation</span>
-          </div>
-          <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
-        <button class="screen-row" data-screen="lunge">
-          <span class="screen-row-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M12 6v5l-4 5M12 11l4 5"/></svg>
-          </span>
-          <div class="screen-row-info">
-            <span class="screen-row-name">Lunge</span>
-            <span class="screen-row-desc">Single-leg forward lunge</span>
-          </div>
-          <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
-        <button class="screen-row" data-screen="overhead">
-          <span class="screen-row-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v5M7 9l5 3 5-3M7 4l-2-2M17 4l2-2"/></svg>
-          </span>
-          <div class="screen-row-info">
-            <span class="screen-row-name">Overhead</span>
-            <span class="screen-row-desc">Bilateral shoulder mobility</span>
-          </div>
-          <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
-        <button class="screen-row" data-screen="gait">
-          <span class="screen-row-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M7 22l4-10 3 3 2-5"/><path d="M9 9l-2 4h5"/></svg>
-          </span>
-          <div class="screen-row-info">
-            <span class="screen-row-name">Gait</span>
-            <span class="screen-row-desc">Walk-past lateral gait screen</span>
-          </div>
-          <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
+      <div class="screen-accordion">
+        <div class="screen-item" data-screen="squat">
+          <button class="screen-row" data-screen="squat">
+            <span class="screen-row-icon">
+              <!-- Front-view squat: head, torso, wide legs bent at depth -->
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="3" r="2"/><path d="M12 5v3"/><path d="M9 8h6"/><path d="M9 8L6 14L8 19"/><path d="M15 8L18 14L16 19"/></svg>
+            </span>
+            <div class="screen-row-info">
+              <span class="screen-row-name">Squat</span>
+              <span class="screen-row-desc">Bilateral depth &amp; compensation</span>
+            </div>
+            <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        <div class="screen-item" data-screen="lunge">
+          <button class="screen-row" data-screen="lunge">
+            <span class="screen-row-icon">
+              <!-- Lateral lunge: torso upright, front knee bent, rear leg extended -->
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="3" r="2"/><path d="M12 5l-1 5"/><path d="M11 10L7 15L8 20"/><path d="M11 10L16 14L17 19"/><path d="M10 7L7 10"/><path d="M10 7L14 9"/></svg>
+            </span>
+            <div class="screen-row-info">
+              <span class="screen-row-name">Lunge</span>
+              <span class="screen-row-desc">Single-leg forward lunge</span>
+            </div>
+            <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        <div class="screen-item" data-screen="overhead">
+          <button class="screen-row" data-screen="overhead">
+            <span class="screen-row-icon">
+              <!-- Overhead: standing, arms raised wide in Y shape above head -->
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M12 6v7"/><path d="M7 3l5 5"/><path d="M17 3l-5 5"/><path d="M12 13l-3 7"/><path d="M12 13l3 7"/></svg>
+            </span>
+            <div class="screen-row-info">
+              <span class="screen-row-name">Overhead</span>
+              <span class="screen-row-desc">Bilateral shoulder mobility</span>
+            </div>
+            <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        <div class="screen-item" data-screen="gait">
+          <button class="screen-row" data-screen="gait">
+            <span class="screen-row-icon">
+              <!-- Lateral walking stride: legs scissored, opposite arms swinging -->
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="3" r="2"/><path d="M11 5l-1 6"/><path d="M10 11L6 16L8 21"/><path d="M10 11L15 15L13 20"/><path d="M10 8L14 7"/><path d="M10 8L7 6"/></svg>
+            </span>
+            <div class="screen-row-info">
+              <span class="screen-row-name">Gait</span>
+              <span class="screen-row-desc">Walk-past lateral gait screen</span>
+            </div>
+            <svg class="screen-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
       </div>
 
-      <!-- Options panel — slides open when an assessment is selected -->
-      <div id="setup-options" class="setup-options open">
+      <!-- Options panel — JS moves this inside the active .screen-item -->
+      <div id="setup-options" class="setup-options">
 
         <div id="angle-option-group" class="option-group">
           <p class="option-label">Camera angle</p>
@@ -155,6 +167,13 @@
               </span>
               <span class="angle-label">Posterior</span>
               <span class="angle-desc">Back to camera</span>
+            </button>
+            <button class="angle-btn angle-btn-3d" data-angle="3d">
+              <span class="angle-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </span>
+              <span class="angle-label">Full 3D</span>
+              <span class="angle-desc">All 4 angles</span>
             </button>
           </div>
         </div>
@@ -205,6 +224,10 @@
             <span id="timer">0:00</span>
           </div>
           <div id="pose-status" class="pose-status">Waiting for pose…</div>
+          <div id="phase-indicator" class="phase-indicator hidden">
+            <div id="phase-dots" class="phase-dots"></div>
+            <span id="phase-label" class="phase-label"></span>
+          </div>
         </div>
       </div>
       <div class="recording-controls">
@@ -213,6 +236,7 @@
           <span>Flip</span>
         </button>
         <button id="stop-btn" class="btn-stop"><span class="stop-square"></span></button>
+        <button id="next-angle-btn" class="btn-next-angle hidden">Next →</button>
         <button id="cancel-btn" class="btn-ghost">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           <span>Cancel</span>

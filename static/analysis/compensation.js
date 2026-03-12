@@ -198,9 +198,16 @@ export function detectCompensations(
     }
 
     // 4. Bilateral symmetry (L vs R) — only valid from a frontal camera
-    checkBilateralAsymmetry(findings, t, 'Knee Flexion',     angles.leftKneeFlexion,     angles.rightKneeFlexion);
-    checkBilateralAsymmetry(findings, t, 'Hip Flexion',      angles.leftHipFlexion,      angles.rightHipFlexion);
-    checkBilateralAsymmetry(findings, t, 'Shoulder Flexion', angles.leftShoulderFlexion, angles.rightShoulderFlexion);
+    // Hip flexion: skip for squat — 2D frontal projection of shoulder-hip-knee
+    // is too noisy to reliably detect left-vs-right depth asymmetry.
+    // Useful for lunge where one side is loaded significantly more.
+    if (screenType !== 'squat') {
+      checkBilateralAsymmetry(findings, t, 'Hip Flexion', angles.leftHipFlexion, angles.rightHipFlexion);
+    }
+    // Shoulder flexion: only meaningful for overhead reach.
+    if (screenType === 'overhead') {
+      checkBilateralAsymmetry(findings, t, 'Shoulder Flexion', angles.leftShoulderFlexion, angles.rightShoulderFlexion);
+    }
   }
 
   // =========================================================
@@ -351,7 +358,10 @@ export function detectCompensations(
 
     // 11. Spinal segmental curvature
     //     Ear-shoulder-hip angle: 180° = straight; deviations = curvature.
-    if (angles.spineSegmentalAngle != null) {
+    //     Excluded from squat: at depth, thoracolumbar flexion is a normal part
+    //     of the movement and consistently exceeds the 7° Grade B threshold on
+    //     healthy squatters. Overlaps with trunk lean and upper trunk checks.
+    if (screenType !== 'squat' && angles.spineSegmentalAngle != null) {
       const deviation = 180.0 - angles.spineSegmentalAngle;
       if (deviation > 0) {
         const sev = gradeFromThresholds(
