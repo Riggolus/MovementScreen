@@ -5,7 +5,9 @@
  */
 
 import { detectCompensations } from './compensation.js';
-import { FRONTAL_FULL_DEPTH_FRACTION } from './screens.js';
+
+// Must match FRONTAL_FULL_DEPTH_FRACTION in screens.js
+const FRONTAL_FULL_DEPTH_FRACTION = 0.90;
 
 // ---------------------------------------------------------------------------
 // Tracked fields: camelCase key used in JS angle objects, snake_case field
