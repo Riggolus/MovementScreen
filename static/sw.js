@@ -1,4 +1,4 @@
-const CACHE = 'movementscreen-v20';
+const CACHE = 'movementscreen-v22';
 
 const ASSETS = [
   '/',
@@ -18,7 +18,7 @@ const ASSETS = [
   '/static/mediapipe/wasm/vision_wasm_internal.wasm',
   '/static/mediapipe/wasm/vision_wasm_nosimd_internal.js',
   '/static/mediapipe/wasm/vision_wasm_nosimd_internal.wasm',
-  '/static/mediapipe/pose_landmarker_lite.task',
+  '/static/mediapipe/pose_landmarker_full.task',
   '/static/icons/icon.svg',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',

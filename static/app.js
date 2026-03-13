@@ -41,7 +41,7 @@ async function initPoseLandmarker() {
   );
   poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
     baseOptions: {
-      modelAssetPath: '/static/mediapipe/pose_landmarker_lite.task',
+      modelAssetPath: '/static/mediapipe/pose_landmarker_full.task',
       delegate: 'GPU',
     },
     runningMode: 'VIDEO',
@@ -49,8 +49,6 @@ async function initPoseLandmarker() {
   });
 }
 initPoseLandmarker().catch(() => {});
-
-// ── Auth state ───────────────────────────────────────────
 
 // ── App state ─────────────────────────────────────────────
 let currentScreen      = 'squat';
@@ -91,7 +89,6 @@ const MIN_3D_PHASE_FRAMES = 20;
 
 // ── DOM refs ─────────────────────────────────────────────
 const views = {
-  auth:       document.getElementById('view-auth'),
   setup:      document.getElementById('view-setup'),
   recording:  document.getElementById('view-recording'),
   processing: document.getElementById('view-processing'),

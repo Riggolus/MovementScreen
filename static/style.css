@@ -109,51 +109,6 @@ body {
   to   { opacity: 1; transform: translateY(0)    scale(1);   }
 }
 
-/* ── Auth View ─────────────────────────────────────────── */
-.auth-wrap {
-  display: flex; flex-direction: column; align-items: center;
-  min-height: calc(100dvh - var(--header-h) - 40px);
-  justify-content: center; padding: 32px 0;
-}
-.auth-logo {
-  text-align: center; margin-bottom: 28px;
-  display: flex; flex-direction: column; align-items: center; gap: 12px;
-}
-/* Auth page logo mark — horizontal bars, larger */
-.auth-logo-mark {
-  width: 36px; height: 28px; position: relative;
-}
-.auth-logo-mark::before, .auth-logo-mark::after {
-  content: ''; position: absolute; left: 0; height: 4px;
-  background: var(--primary); border-radius: 3px;
-}
-.auth-logo-mark::before { width: 100%; top: 3px; }
-.auth-logo-mark::after  { width: 60%; top: 17px; }
-.auth-logo h1 { font-size: 24px; font-weight: 800; letter-spacing: -.4px; }
-.auth-logo p  { font-size: 15px; color: var(--text-2); }
-.auth-card { width: 100%; max-width: 400px; padding: 28px 24px; }
-.auth-tabs {
-  display: flex; gap: 4px; margin-bottom: 24px;
-  background: var(--surface-2); border-radius: 10px; padding: 4px;
-}
-.auth-tab {
-  flex: 1; padding: 9px; border-radius: 8px; border: none;
-  font-size: 14px; font-weight: 600; cursor: pointer;
-  background: none; color: var(--text-3); transition: all .15s;
-}
-.auth-tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
-.auth-form { display: flex; flex-direction: column; gap: 14px; }
-.auth-form.hidden { display: none; }
-.field { display: flex; flex-direction: column; gap: 5px; }
-.field label { font-size: 13px; font-weight: 600; color: var(--text-2); }
-.field input {
-  padding: 11px 14px; border: 1.5px solid var(--border); border-radius: var(--r-sm);
-  font-size: 15px; font-family: inherit; color: var(--text); background: var(--surface-2);
-  transition: border-color .15s; outline: none;
-}
-.field input:focus { border-color: var(--primary); background: var(--surface); }
-.form-error { font-size: 13px; color: var(--severe); font-weight: 500; }
-.form-error.hidden { display: none; }
 
 /* ── Setup View ────────────────────────────────────────── */
 .hero { padding: 36px 0 28px; }
