@@ -125,6 +125,17 @@ export function detectCompensations(
   // =========================================================
   if (isFrontal) {
 
+    // Posterior view: person faces away so the image is NOT mirrored left-right.
+    // The valgus deviation was computed assuming anterior (person faces camera),
+    // so the sign is inverted for posterior — negate to restore correct polarity.
+    if (cameraAngle === 'posterior') {
+      angles = {
+        ...angles,
+        leftKneeFrontalAngle:  angles.leftKneeFrontalAngle  != null ? -angles.leftKneeFrontalAngle  : null,
+        rightKneeFrontalAngle: angles.rightKneeFrontalAngle != null ? -angles.rightKneeFrontalAngle : null,
+      };
+    }
+
     // 1. Knee valgus (frontal plane collapse)
     //    Positive deviation = knee medial to hip-ankle line = valgus.
     //    Higher deviation = worse.
@@ -284,39 +295,12 @@ export function detectCompensations(
       }
     }
 
-    // 8. Ankle dorsiflexion — knee-ankle-foot proxy (secondary)
-    //    Only flag if tibial angle didn't already fire for the same side.
-    const tibialFlagged = new Set(
-      findings
-        .filter(f => f.name.includes('Restricted Dorsiflexion'))
-        .map(f => f.name.startsWith('Left') ? 'Left' : 'Right'),
-    );
-
-    for (const [side, df] of [
-      ['Left',  angles.leftAnkleDorsiflexion],
-      ['Right', angles.rightAnkleDorsiflexion],
-    ]) {
-      if (df != null && !tibialFlagged.has(side)) {
-        const sev = gradeFromThresholds(
-          df,
-          t.ankle_df_b, t.ankle_df_c, t.ankle_df_d,
-          t.ankle_df_e, t.ankle_df_f,
-          true,
-        );
-        if (sev !== 'A') {
-          findings.push({
-            name: `${side} Heel Rise / Limited Dorsiflexion`,
-            severity: sev,
-            description: `restricted ankle dorsiflexion on ${side.toLowerCase()} side`,
-            metricValue: Math.round(df * 10) / 10,
-            metricLabel: 'ankle angle (deg)',
-          });
-        }
-      }
-    }
-
     // 9. Head forward posture
-    if (angles.headForwardOffset != null) {
+    // Excluded from squat: the ear sits above the shoulder along the spine, so any
+    // forward trunk lean increases the horizontal ear-shoulder gap proportionally
+    // (offset ≈ ear-shoulder-length × sin(lean)). At typical squat depth the offset
+    // exceeds the Grade B threshold even with perfect neck posture.
+    if (screenType !== 'squat' && angles.headForwardOffset != null) {
       const offset = Math.abs(angles.headForwardOffset);
       const sev = gradeFromThresholds(
         offset,
@@ -336,7 +320,10 @@ export function detectCompensations(
     }
 
     // 10. Upper trunk flexion
-    if (angles.upperTrunkAngle != null) {
+    // Excluded from squat: the ear-shoulder segment tilts forward with the trunk lean,
+    // so this angle is dominated by overall forward lean rather than true kyphosis.
+    // At 30° squat lean the segment is ~30° from vertical — Grade D–E with perfect posture.
+    if (screenType !== 'squat' && angles.upperTrunkAngle != null) {
       const sev = gradeFromThresholds(
         angles.upperTrunkAngle,
         t.upper_trunk_b, t.upper_trunk_c, t.upper_trunk_d,
