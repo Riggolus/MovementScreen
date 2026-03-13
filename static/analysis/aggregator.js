@@ -229,8 +229,31 @@ export function createAggregator(screenName) {
     // -----------------------------------------------------------------------
     // 3. Run compensation detection on the worst-case angles
     // -----------------------------------------------------------------------
-    const { findings: rawFindings, worstSeverity, hasFindings } =
+    const { findings: rawFindings, worstSeverity: detectedWorst, hasFindings: detectedHasFindings } =
       detectCompensations(worst, cameraAngle, thresholds, screenType, lateralSide);
+
+    // If no at-depth frames were captured for squat or lunge, flag it as a finding.
+    // This prevents a zero-data trial from scoring as a perfect Grade A.
+    const GRADE_ORD = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5 };
+    if (frames.length === 0 && (screenType === 'squat' || screenType === 'lunge')) {
+      const screenLabel = screenType === 'squat' ? 'Squat' : 'Lunge';
+      rawFindings.push({
+        name: `Insufficient ${screenLabel} Depth`,
+        severity: 'D',
+        description:
+          `No frames reached adequate ${screenLabel.toLowerCase()} depth during this recording. ` +
+          `Inability to reach depth may indicate ankle dorsiflexion restriction, hip mobility limitation, or pain avoidance.`,
+        metricValue: 0,
+        metricLabel: 'at-depth frames captured',
+      });
+    }
+
+    let worstSeverity = detectedWorst;
+    let hasFindings   = detectedHasFindings;
+    for (const f of rawFindings) {
+      if (GRADE_ORD[f.severity] > GRADE_ORD[worstSeverity]) worstSeverity = f.severity;
+      if (f.severity !== 'A') hasFindings = true;
+    }
 
     // Convert camelCase finding keys to snake_case to match server response format
     const findings = rawFindings.map(f => ({

@@ -47,10 +47,11 @@ const SQUAT_DEPTH_THRESHOLD_DEGREES = 115.0;
 
 /**
  * Frontal-camera hip-to-knee normalised height ratio threshold.
- * 0.95 = hip must be within ~5% of knee height (near-parallel).
- * Was 0.85 which fired too early (above-parallel quarter squats passing as "at depth").
+ * 0.88 = hip must be within ~12% of knee height — captures the lower portion
+ * of the squat where compensations (valgus, trunk shift) are most visible,
+ * without accepting shallow quarter squats (which fail this gate at ~0.75).
  */
-const FRONTAL_DEPTH_HIP_FRACTION = 0.95;
+const FRONTAL_DEPTH_HIP_FRACTION = 0.88;
 
 /** Lead-knee angle below which a lunge is considered at-depth. */
 const LUNGE_DEPTH_THRESHOLD_DEGREES = 105.0;
