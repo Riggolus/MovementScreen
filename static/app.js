@@ -41,7 +41,7 @@ async function initPoseLandmarker() {
   );
   poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
     baseOptions: {
-      modelAssetPath: '/static/mediapipe/pose_landmarker_lite.task',
+      modelAssetPath: '/static/mediapipe/pose_landmarker_full.task',
       delegate: 'GPU',
     },
     runningMode: 'VIDEO',
