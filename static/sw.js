@@ -1,4 +1,4 @@
-const CACHE = 'movementscreen-v16';
+const CACHE = 'movementscreen-v17';
 
 const ASSETS = [
   '/',
@@ -12,6 +12,7 @@ const ASSETS = [
   '/static/analysis/screens.js',
   '/static/analysis/thresholds.js',
   '/static/db/local_db.js',
+  '/static/icons/icon.svg',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
 ];
