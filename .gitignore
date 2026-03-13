@@ -26,3 +26,7 @@ terraform/terraform.tfvars
 
 # MediaPipe models (downloaded at build time, no need to track)
 movementscreen/pose/models/*.task
+
+# Capacitor / Node
+node_modules/
+www/
