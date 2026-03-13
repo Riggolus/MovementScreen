@@ -1,22 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!-- Near-black rounded square background -->
   <rect width="512" height="512" rx="110" fill="#141414"/>
-
-  <!-- Front-view squat figure in warm white -->
-  <!-- Head -->
-  <circle cx="256" cy="112" r="38" fill="#f7f5f0"/>
-  <!-- Torso -->
-  <line x1="256" y1="150" x2="256" y2="222"
-        stroke="#f7f5f0" stroke-width="24" stroke-linecap="round"/>
-  <!-- Hip bar -->
-  <line x1="196" y1="222" x2="316" y2="222"
-        stroke="#f7f5f0" stroke-width="24" stroke-linecap="round"/>
-  <!-- Left leg: thigh out-and-down, shin back under foot -->
-  <polyline points="196,222 152,322 178,415"
-            fill="none" stroke="#f7f5f0" stroke-width="24"
-            stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Right leg: mirror -->
-  <polyline points="316,222 360,322 334,415"
-            fill="none" stroke="#f7f5f0" stroke-width="24"
-            stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Logo mark: two horizontal bars (full width + 65%) matching the header mark -->
+  <rect x="116" y="196" width="280" height="36" rx="18" fill="#f7f5f0"/>
+  <rect x="116" y="268" width="182" height="36" rx="18" fill="#f7f5f0"/>
 </svg>
