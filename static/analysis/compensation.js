@@ -296,7 +296,11 @@ export function detectCompensations(
     }
 
     // 9. Head forward posture
-    if (angles.headForwardOffset != null) {
+    // Excluded from squat: the ear sits above the shoulder along the spine, so any
+    // forward trunk lean increases the horizontal ear-shoulder gap proportionally
+    // (offset ≈ ear-shoulder-length × sin(lean)). At typical squat depth the offset
+    // exceeds the Grade B threshold even with perfect neck posture.
+    if (screenType !== 'squat' && angles.headForwardOffset != null) {
       const offset = Math.abs(angles.headForwardOffset);
       const sev = gradeFromThresholds(
         offset,
@@ -316,7 +320,10 @@ export function detectCompensations(
     }
 
     // 10. Upper trunk flexion
-    if (angles.upperTrunkAngle != null) {
+    // Excluded from squat: the ear-shoulder segment tilts forward with the trunk lean,
+    // so this angle is dominated by overall forward lean rather than true kyphosis.
+    // At 30° squat lean the segment is ~30° from vertical — Grade D–E with perfect posture.
+    if (screenType !== 'squat' && angles.upperTrunkAngle != null) {
       const sev = gradeFromThresholds(
         angles.upperTrunkAngle,
         t.upper_trunk_b, t.upper_trunk_c, t.upper_trunk_d,
