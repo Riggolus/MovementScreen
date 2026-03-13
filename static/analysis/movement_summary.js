@@ -33,7 +33,7 @@ export const MOVEMENT_CHAINS = [
   {
     id: 'ankle_foot',
     label: 'Ankle & Foot',
-    icon: '🦶',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h7l2-7H8l-2-7H3"/><path d="M15 20h6"/><path d="M18 14l-3 6"/></svg>',
     description:
       'Ankle dorsiflexion restriction limits squat depth, disrupts gait push-off, ' +
       'and forces compensations upstream into the knee and hip.',
@@ -47,7 +47,7 @@ export const MOVEMENT_CHAINS = [
   {
     id: 'knee_hip_stability',
     label: 'Knee & Hip Stability',
-    icon: '🦵',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10l4 6"/><path d="M12 13l-4 6"/><circle cx="12" cy="3" r="1.5"/></svg>',
     description:
       'Medial knee collapse and pelvic drop during loading tasks signal hip ' +
       'abductor and glute weakness, raising injury risk at the knee and lower back.',
@@ -61,7 +61,7 @@ export const MOVEMENT_CHAINS = [
   {
     id: 'hip_mobility',
     label: 'Hip Mobility',
-    icon: '🔄',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>',
     description:
       'Restricted hip flexion and bilateral asymmetry suggest hip flexor tightness ' +
       'or joint restriction, often manifesting as excessive trunk lean to compensate.',
@@ -75,7 +75,7 @@ export const MOVEMENT_CHAINS = [
   {
     id: 'trunk_control',
     label: 'Trunk Control',
-    icon: '⚖️',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><path d="M5 7l7-4 7 4"/><path d="M5 17l7 4 7-4"/></svg>',
     description:
       'Lateral trunk shift and rotational asymmetry reflect core stability deficits ' +
       'that compromise load transfer between the lower and upper body.',
@@ -89,7 +89,7 @@ export const MOVEMENT_CHAINS = [
   {
     id: 'shoulder_thoracic',
     label: 'Shoulder & Thoracic',
-    icon: '🙌',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v7"/><path d="M5 5l5 4"/><path d="M19 5l-5 4"/><path d="M12 9v12"/></svg>',
     description:
       'Overhead reach limitation and shoulder asymmetry reflect thoracic stiffness ' +
       'or shoulder mobility restriction — critical for overhead pressing and throwing patterns.',
@@ -103,7 +103,7 @@ export const MOVEMENT_CHAINS = [
   {
     id: 'gait_pattern',
     label: 'Gait Pattern',
-    icon: '🚶',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M12 6l-2 6 3 3-2 5"/><path d="M10 12l-3 2"/><path d="M13 15l3 2"/></svg>',
     description:
       'Gait compensations reveal how upstream mobility and stability restrictions ' +
       'manifest during the demands of real-world locomotion.',
