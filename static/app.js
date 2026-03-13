@@ -4,7 +4,7 @@ import {
   PoseLandmarker,
   FilesetResolver,
   DrawingUtils,
-} from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs';
+} from '/static/mediapipe/vision_bundle.mjs';
 
 import { computeJointAngles, LM } from './analysis/joint_angles.js';
 import { createAggregator, createGaitAggregator } from './analysis/aggregator.js';
@@ -37,12 +37,11 @@ let animFrameId    = null;
 async function initPoseLandmarker() {
   if (poseLandmarker) return;
   const vision = await FilesetResolver.forVisionTasks(
-    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+    '/static/mediapipe/wasm'
   );
   poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
     baseOptions: {
-      modelAssetPath:
-        'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task',
+      modelAssetPath: '/static/mediapipe/pose_landmarker_lite.task',
       delegate: 'GPU',
     },
     runningMode: 'VIDEO',

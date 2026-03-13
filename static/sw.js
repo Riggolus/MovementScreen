@@ -1,4 +1,4 @@
-const CACHE = 'movementscreen-v19';
+const CACHE = 'movementscreen-v20';
 
 const ASSETS = [
   '/',
@@ -13,6 +13,12 @@ const ASSETS = [
   '/static/analysis/screens.js',
   '/static/analysis/thresholds.js',
   '/static/db/local_db.js',
+  '/static/mediapipe/vision_bundle.mjs',
+  '/static/mediapipe/wasm/vision_wasm_internal.js',
+  '/static/mediapipe/wasm/vision_wasm_internal.wasm',
+  '/static/mediapipe/wasm/vision_wasm_nosimd_internal.js',
+  '/static/mediapipe/wasm/vision_wasm_nosimd_internal.wasm',
+  '/static/mediapipe/pose_landmarker_lite.task',
   '/static/icons/icon.svg',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
