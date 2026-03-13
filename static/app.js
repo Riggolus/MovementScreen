@@ -847,7 +847,7 @@ function renderResults(data) {
 }
 
 // ── History / Progress ────────────────────────────────────
-const SCREEN_EMOJI = { squat: '🏋️', lunge: '🦵', overhead: '🙌', gait: '🚶' };
+const SCREEN_INITIAL = { squat: 'SQ', lunge: 'LU', overhead: 'OH', gait: 'GA' };
 const SCREEN_COLORS = { squat: '#6366f1', lunge: '#8b5cf6', overhead: '#0ea5e9', gait: '#0d9488' };
 
 // ── Global Movement Summary ───────────────────────────────
@@ -875,7 +875,7 @@ async function loadSummary() {
   if (!summary) {
     el.innerHTML = `
       <div class="summary-empty">
-        <p class="summary-empty-icon">📋</p>
+        <div class="summary-empty-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12h8M8 8h5M8 16h3"/></svg></div>
         <h2>No assessments yet</h2>
         <p>Complete at least one assessment to see your movement summary.</p>
         <button class="btn-primary" style="margin-top:20px" onclick="showView('setup')">Start Assessment</button>
@@ -1025,7 +1025,7 @@ function renderHistory(assessments, byScreen) {
       html += `
         <div class="assessment-card">
           <div class="assessment-card-header" data-id="${a.id}">
-            <div class="assessment-screen-badge">${SCREEN_EMOJI[a.screen_type] ?? '📋'}</div>
+            <div class="assessment-screen-badge">${SCREEN_INITIAL[a.screen_type] ?? '??'}</div>
             <div class="assessment-info">
               <div class="assessment-title">${screenName}${a.screen_type === 'lunge' && a.lead_side ? ` (${a.lead_side})` : ''} · ${ANGLE_LABEL[a.camera_angle] ?? a.camera_angle}</div>
               <div class="assessment-date">${date}</div>
@@ -1363,9 +1363,9 @@ function renderAdminPage(data) {
     </div>
     <div class="filter-tabs">
       <button class="filter-tab active" data-filter="all">All</button>
-      <button class="filter-tab" data-filter="squat">🏋️ Squat</button>
-      <button class="filter-tab" data-filter="lunge">🦵 Lunge</button>
-      <button class="filter-tab" data-filter="overhead">🙌 Overhead</button>
+      <button class="filter-tab" data-filter="squat">Squat</button>
+      <button class="filter-tab" data-filter="lunge">Lunge</button>
+      <button class="filter-tab" data-filter="overhead">Overhead</button>
       <button class="filter-tab" data-filter="lateral">↔ Lateral View</button>
     </div>
   `;
