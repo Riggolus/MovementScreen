@@ -1,10 +1,11 @@
-const CACHE = 'movementscreen-v17';
+const CACHE = 'movementscreen-v18';
 
 const ASSETS = [
   '/',
   '/manifest.json',
   '/static/style.css',
   '/static/app.js',
+  '/static/analysis/movement_summary.js',
   '/static/analysis/aggregator.js',
   '/static/analysis/compensation.js',
   '/static/analysis/geometry.js',
