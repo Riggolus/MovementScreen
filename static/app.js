@@ -50,8 +50,6 @@ async function initPoseLandmarker() {
 }
 initPoseLandmarker().catch(() => {});
 
-// ── Auth state ───────────────────────────────────────────
-
 // ── App state ─────────────────────────────────────────────
 let currentScreen      = 'squat';
 let currentSide        = 'left';
@@ -91,7 +89,6 @@ const MIN_3D_PHASE_FRAMES = 20;
 
 // ── DOM refs ─────────────────────────────────────────────
 const views = {
-  auth:       document.getElementById('view-auth'),
   setup:      document.getElementById('view-setup'),
   recording:  document.getElementById('view-recording'),
   processing: document.getElementById('view-processing'),

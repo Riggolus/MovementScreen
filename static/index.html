@@ -31,56 +31,8 @@
   <!-- ── MAIN ───────────────────────────────────────────── -->
   <main class="main">
 
-    <!-- ── VIEW: AUTH ───────────────────────────────────── -->
-    <div id="view-auth" class="view active">
-      <div class="auth-wrap">
-        <div class="auth-logo">
-          <div class="auth-logo-mark" aria-hidden="true"></div>
-          <h1>MovementScreen</h1>
-          <p>Track your movement quality over time</p>
-        </div>
-
-        <div class="card auth-card">
-          <div class="auth-tabs">
-            <button class="auth-tab active" data-tab="login">Log in</button>
-            <button class="auth-tab" data-tab="register">Sign up</button>
-          </div>
-
-          <form id="login-form" class="auth-form">
-            <div class="field">
-              <label>Email</label>
-              <input type="email" name="email" placeholder="you@example.com" required autocomplete="email"/>
-            </div>
-            <div class="field">
-              <label>Password</label>
-              <input type="password" name="password" placeholder="••••••••" required autocomplete="current-password"/>
-            </div>
-            <p id="login-error" class="form-error hidden"></p>
-            <button type="submit" class="btn-primary">Log in</button>
-          </form>
-
-          <form id="register-form" class="auth-form hidden">
-            <div class="field">
-              <label>Full name</label>
-              <input type="text" name="name" placeholder="Jane Smith" required autocomplete="name"/>
-            </div>
-            <div class="field">
-              <label>Email</label>
-              <input type="email" name="email" placeholder="you@example.com" required autocomplete="email"/>
-            </div>
-            <div class="field">
-              <label>Password</label>
-              <input type="password" name="password" placeholder="••••••••" required autocomplete="new-password" minlength="8"/>
-            </div>
-            <p id="register-error" class="form-error hidden"></p>
-            <button type="submit" class="btn-primary">Create account</button>
-          </form>
-        </div>
-      </div>
-    </div>
-
     <!-- ── VIEW: SETUP ──────────────────────────────────── -->
-    <div id="view-setup" class="view">
+    <div id="view-setup" class="view active">
       <div class="hero">
         <h1>Movement<br/>Analysis</h1>
         <p>Choose an assessment to get started.</p>
