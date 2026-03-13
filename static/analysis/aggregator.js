@@ -5,6 +5,7 @@
  */
 
 import { detectCompensations } from './compensation.js';
+import { FRONTAL_FULL_DEPTH_FRACTION } from './screens.js';
 
 // ---------------------------------------------------------------------------
 // Tracked fields: camelCase key used in JS angle objects, snake_case field
@@ -114,13 +115,16 @@ function round1(v) {
 export function createAggregator(screenName) {
   /** @type {Object[]} */
   const frames = [];
+  let maxDepthRatio = 0;
 
   /**
    * Add a per-frame angles object to the internal buffer.
-   * @param {Object} angles - camelCase angle fields
+   * @param {Object} angles     - camelCase angle fields
+   * @param {number} [depthRatio=1] - hip/knee depth ratio from acceptFrameSquat (0–1+)
    */
-  function addFrame(angles) {
+  function addFrame(angles, depthRatio = 1) {
     frames.push(angles);
+    if (depthRatio > maxDepthRatio) maxDepthRatio = depthRatio;
   }
 
   /**
@@ -232,20 +236,33 @@ export function createAggregator(screenName) {
     const { findings: rawFindings, worstSeverity: detectedWorst, hasFindings: detectedHasFindings } =
       detectCompensations(worst, cameraAngle, thresholds, screenType, lateralSide);
 
-    // If no at-depth frames were captured for squat or lunge, flag it as a finding.
-    // This prevents a zero-data trial from scoring as a perfect Grade A.
+    // Depth findings for squat — independent of compensation results.
+    // Uses maxDepthRatio tracked across all captured frames.
     const GRADE_ORD = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5 };
-    if (frames.length === 0 && (screenType === 'squat' || screenType === 'lunge')) {
-      const screenLabel = screenType === 'squat' ? 'Squat' : 'Lunge';
-      rawFindings.push({
-        name: `Insufficient ${screenLabel} Depth`,
-        severity: 'D',
-        description:
-          `No frames reached adequate ${screenLabel.toLowerCase()} depth during this recording. ` +
-          `Inability to reach depth may indicate ankle dorsiflexion restriction, hip mobility limitation, or pain avoidance.`,
-        metricValue: 0,
-        metricLabel: 'at-depth frames captured',
-      });
+    if (screenType === 'squat') {
+      if (frames.length === 0) {
+        // No squat motion detected at all
+        rawFindings.push({
+          name: 'Insufficient Squat Depth',
+          severity: 'D',
+          description:
+            'No frames were captured — the movement did not reach a sufficient depth for analysis. ' +
+            'Inability to reach depth may indicate ankle dorsiflexion restriction, hip mobility limitation, or pain avoidance.',
+          metricValue: 0,
+          metricLabel: 'max depth ratio',
+        });
+      } else if (cameraAngle !== 'lateral' && maxDepthRatio < FRONTAL_FULL_DEPTH_FRACTION) {
+        // Frames captured but depth was reduced — compensations are analysed but depth is flagged
+        rawFindings.push({
+          name: 'Reduced Squat Depth',
+          severity: 'C',
+          description:
+            `Squat did not reach near-parallel depth (max depth ratio: ${maxDepthRatio.toFixed(2)}). ` +
+            'Reduced depth may reflect ankle dorsiflexion restriction, hip mobility limitation, or deliberate avoidance.',
+          metricValue: Math.round(maxDepthRatio * 100) / 100,
+          metricLabel: 'max depth ratio',
+        });
+      }
     }
 
     let worstSeverity = detectedWorst;

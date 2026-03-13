@@ -533,10 +533,13 @@ function startSkeletonLoop() {
               if (inFrame) { aggregator.addFrame(computeJointAngles(lms), relAnkleY); phase3DFrames++; }
             } else {
               let atDepth = false;
-              if (currentScreen === 'squat')         atDepth = acceptFrameSquat(lms, currentAngle, currentLateralSide);
-              else if (currentScreen === 'lunge')    atDepth = acceptFrameLunge(lms, currentAngle, currentSide);
+              let depthRatio = 1;
+              if (currentScreen === 'squat') {
+                const r = acceptFrameSquat(lms, currentAngle, currentLateralSide);
+                atDepth = r.accepted; depthRatio = r.depthRatio;
+              } else if (currentScreen === 'lunge')    atDepth = acceptFrameLunge(lms, currentAngle, currentSide);
               else if (currentScreen === 'overhead') atDepth = acceptFrameOverhead(lms);
-              if (atDepth) { aggregator.addFrame(computeJointAngles(lms)); phase3DFrames++; }
+              if (atDepth) { aggregator.addFrame(computeJointAngles(lms), depthRatio); phase3DFrames++; }
             }
 
             // 3D mode: reveal Next/Finish button once minimum frames collected
