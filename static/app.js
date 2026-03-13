@@ -27,6 +27,7 @@ import {
   getAssessment,
   deleteAssessment,
 } from './db/local_db.js';
+import { computeGlobalSummary } from './analysis/movement_summary.js';
 
 // ── MediaPipe ────────────────────────────────────────────
 let poseLandmarker = null;
@@ -97,6 +98,7 @@ const views = {
   processing: document.getElementById('view-processing'),
   results:    document.getElementById('view-results'),
   history:    document.getElementById('view-history'),
+  summary:    document.getElementById('view-summary'),
   admin:      document.getElementById('view-admin'),
   report:     document.getElementById('view-report'),
   error:      document.getElementById('view-error'),
@@ -127,6 +129,10 @@ function updateHeader() {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       <span>Home</span>
     </button>
+    <button class="nav-btn" id="nav-summary-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/><path d="M8 12h.01M12 8h.01"/></svg>
+      <span>Summary</span>
+    </button>
     <button class="nav-btn" id="nav-history-btn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <span>History</span>
@@ -137,6 +143,7 @@ function updateHeader() {
     </button>
   `;
   document.getElementById('nav-home-btn').addEventListener('click', () => showView('setup'));
+  document.getElementById('nav-summary-btn').addEventListener('click', loadSummary);
   document.getElementById('nav-history-btn').addEventListener('click', loadHistory);
   document.getElementById('nav-admin-btn').addEventListener('click', loadAdminPage);
 }
@@ -842,6 +849,120 @@ function renderResults(data) {
 // ── History / Progress ────────────────────────────────────
 const SCREEN_EMOJI = { squat: '🏋️', lunge: '🦵', overhead: '🙌', gait: '🚶' };
 const SCREEN_COLORS = { squat: '#6366f1', lunge: '#8b5cf6', overhead: '#0ea5e9', gait: '#0d9488' };
+
+// ── Global Movement Summary ───────────────────────────────
+
+const TREND_ICON  = { improving: '↑', stable: '→', declining: '↓' };
+const TREND_LABEL = { improving: 'Improving', stable: 'Stable', declining: 'Declining' };
+const TREND_CLASS = { improving: 'trend-up', stable: 'trend-stable', declining: 'trend-down' };
+
+const SEV_COLOR_VAR = {
+  A: 'var(--grade-a)', B: 'var(--grade-b)', C: 'var(--grade-c)',
+  D: 'var(--grade-d)', E: 'var(--grade-e)', F: 'var(--grade-f)',
+};
+const SEV_LABEL_S = {
+  A: 'Pass', B: 'Minimal', C: 'Mild', D: 'Moderate', E: 'Significant', F: 'Severe',
+};
+
+async function loadSummary() {
+  showView('summary');
+  const el = views.summary;
+  el.innerHTML = '<div class="summary-loading"><div class="spinner-ring"></div><p>Building summary…</p></div>';
+
+  const assessments = await getAssessments(200);
+  const summary = computeGlobalSummary(assessments);
+
+  if (!summary) {
+    el.innerHTML = `
+      <div class="summary-empty">
+        <p class="summary-empty-icon">📋</p>
+        <h2>No assessments yet</h2>
+        <p>Complete at least one assessment to see your movement summary.</p>
+        <button class="btn-primary" style="margin-top:20px" onclick="showView('setup')">Start Assessment</button>
+      </div>`;
+    return;
+  }
+
+  const fromDate = summary.dateRange.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const toDate   = summary.dateRange.to.toLocaleDateString('en-US',   { month: 'short', day: 'numeric', year: 'numeric' });
+  const sameDay  = fromDate === toDate;
+
+  const overallTrendIcon  = summary.overallTrend ? TREND_ICON[summary.overallTrend]  : '';
+  const overallTrendClass = summary.overallTrend ? TREND_CLASS[summary.overallTrend] : '';
+  const overallTrendLabel = summary.overallTrend ? TREND_LABEL[summary.overallTrend] : '';
+
+  // ── Chain cards ──
+  const chainCards = summary.chains.map(chain => {
+    const isPassing = chain.grade === 'A';
+    const gradeColor = SEV_COLOR_VAR[chain.grade];
+    const trendHtml = chain.trend
+      ? `<span class="chain-trend ${TREND_CLASS[chain.trend]}">${TREND_ICON[chain.trend]} ${TREND_LABEL[chain.trend]}</span>`
+      : '';
+    const confirmedHtml = chain.confirmedIn.length
+      ? `<div class="chain-confirmed">Confirmed in: ${chain.confirmedIn.map(s => `<span class="chain-tag">${s}</span>`).join('')}</div>`
+      : '';
+    const correctionsHtml = !isPassing
+      ? `<div class="chain-corrections">
+           <p class="chain-corrections-label">Recommended focus</p>
+           <ul>${chain.corrections.map(c => `<li>${c}</li>`).join('')}</ul>
+         </div>`
+      : '';
+
+    return `
+      <div class="chain-card ${isPassing ? 'chain-passing' : ''}">
+        <div class="chain-header">
+          <span class="chain-icon">${chain.icon}</span>
+          <div class="chain-title-group">
+            <span class="chain-label">${chain.label}</span>
+            ${confirmedHtml}
+          </div>
+          <div class="chain-grade-wrap">
+            <span class="chain-grade" style="background:${gradeColor}">${chain.grade}</span>
+            ${trendHtml}
+          </div>
+        </div>
+        <p class="chain-description">${chain.description}</p>
+        ${correctionsHtml}
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="summary-wrap">
+
+      <!-- ── Score header ── -->
+      <div class="summary-hero">
+        <div class="summary-score-block">
+          <div class="summary-overall-grade" style="background:${SEV_COLOR_VAR[summary.overallGrade]}">
+            ${summary.overallGrade}
+          </div>
+          <div class="summary-score-meta">
+            <span class="summary-score-label">Movement System</span>
+            <span class="summary-score-sublabel">${SEV_LABEL_S[summary.overallGrade]}</span>
+          </div>
+        </div>
+        ${summary.overallTrend ? `
+        <div class="summary-trend-block ${overallTrendClass}">
+          <span class="summary-trend-icon">${overallTrendIcon}</span>
+          <span class="summary-trend-label">${overallTrendLabel}</span>
+        </div>` : ''}
+      </div>
+
+      <!-- ── Meta row ── -->
+      <div class="summary-meta-row">
+        <span>${summary.assessmentCount} assessment${summary.assessmentCount !== 1 ? 's' : ''}</span>
+        <span>·</span>
+        <span>${sameDay ? fromDate : `${fromDate} – ${toDate}`}</span>
+        ${summary.activeChainCount > 0 ? `<span>·</span><span>${summary.activeChainCount} active chain${summary.activeChainCount !== 1 ? 's' : ''}</span>` : ''}
+      </div>
+
+      <!-- ── Chain cards ── -->
+      <h2 class="summary-section-title">Movement Chains</h2>
+      <div class="summary-chains">
+        ${chainCards}
+      </div>
+
+    </div>`;
+}
 
 async function loadHistory() {
   showView('history');
