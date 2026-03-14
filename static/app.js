@@ -78,10 +78,9 @@ let secondsElapsed = 0;
 let is3D           = false;
 let phase3DIndex   = 0;
 const PHASES_3D    = [
-  { angle: 'anterior',  lateralSide: null,    label: 'Anterior',     turnMsg: 'Now turn 90° — right side toward camera' },
-  { angle: 'lateral',   lateralSide: 'right', label: 'Lateral (R)',  turnMsg: 'Now turn to face away from the camera' },
-  { angle: 'posterior', lateralSide: null,    label: 'Posterior',    turnMsg: 'Now turn 90° — left side toward camera' },
-  { angle: 'lateral',   lateralSide: 'left',  label: 'Lateral (L)',  turnMsg: null },
+  { angle: 'anterior',  lateralSide: null,    label: 'Anterior',    turnMsg: 'Now turn 90° — right side toward camera' },
+  { angle: 'lateral',   lateralSide: 'right', label: 'Lateral (R)', turnMsg: 'Now turn 90° — left side toward camera' },
+  { angle: 'lateral',   lateralSide: 'left',  label: 'Lateral (L)', turnMsg: null },
 ];
 let aggregators3D  = []; // { aggregator, phase } for completed phases
 let phase3DFrames  = 0;
@@ -756,7 +755,7 @@ const SEV_EMOJI  = {
   A: 'A', B: 'B', C: 'C', D: 'D', E: 'E', F: 'F',
   none: 'A', mild: 'C', moderate: 'D', severe: 'F',
 };
-const ANGLE_LABEL = { anterior: 'Anterior', lateral: 'Lateral', posterior: 'Posterior', '3d': 'Full 3D' };
+const ANGLE_LABEL = { anterior: 'Anterior', lateral: 'Lateral', '3d': 'Multi-View' };
 
 function renderResults(data) {
   const sev = data.worst_severity, color = SEV_COLOR[sev];

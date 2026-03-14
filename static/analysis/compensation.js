@@ -117,24 +117,13 @@ export function detectCompensations(
   const t = thresholds ?? getThresholds();
   const findings = [];
 
-  const isFrontal = cameraAngle === 'anterior' || cameraAngle === 'posterior';
+  const isFrontal = cameraAngle === 'anterior';
   const isLateral = cameraAngle === 'lateral';
 
   // =========================================================
   // FRONTAL-PLANE CHECKS  (anterior / posterior camera only)
   // =========================================================
   if (isFrontal) {
-
-    // Posterior view: person faces away so the image is NOT mirrored left-right.
-    // The valgus deviation was computed assuming anterior (person faces camera),
-    // so the sign is inverted for posterior — negate to restore correct polarity.
-    if (cameraAngle === 'posterior') {
-      angles = {
-        ...angles,
-        leftKneeFrontalAngle:  angles.leftKneeFrontalAngle  != null ? -angles.leftKneeFrontalAngle  : null,
-        rightKneeFrontalAngle: angles.rightKneeFrontalAngle != null ? -angles.rightKneeFrontalAngle : null,
-      };
-    }
 
     // 1. Knee valgus (frontal plane collapse)
     //    Positive deviation = knee medial to hip-ankle line = valgus.
@@ -356,11 +345,11 @@ export function detectCompensations(
   if (isLateral) {
 
     // When a lateralSide is specified, null out the far side's per-leg data so
-    // only the near (visible) leg contributes to tibial angle and DF checks.
+    // only the near (visible) leg contributes to tibial angle, DF, and heel-rise checks.
     if (lateralSide === 'left') {
-      angles = { ...angles, tibialAngleRight: null, rightAnkleDorsiflexion: null };
+      angles = { ...angles, tibialAngleRight: null, rightAnkleDorsiflexion: null, heelRiseRight: null };
     } else if (lateralSide === 'right') {
-      angles = { ...angles, tibialAngleLeft: null, leftAnkleDorsiflexion: null };
+      angles = { ...angles, tibialAngleLeft: null, leftAnkleDorsiflexion: null, heelRiseLeft: null };
     }
 
     // 6. Excessive forward trunk lean
@@ -503,6 +492,35 @@ export function detectCompensations(
     // 12. Tibial bilateral asymmetry (lateral) — skip when a single side is selected
     if (!lateralSide) {
       checkBilateralAsymmetry(findings, t, 'Tibial Inclination', angles.tibialAngleLeft, angles.tibialAngleRight);
+    }
+
+    // 13. Heel rise (lateral squat)
+    //     Measures vertical heel elevation relative to the ankle, normalised by tibia length.
+    //     Positive = heel well below ankle (normal); near-zero or negative = heel rising off the floor.
+    //     Lower is worse.
+    for (const [side, heelRise] of [
+      ['Left',  angles.heelRiseLeft],
+      ['Right', angles.heelRiseRight],
+    ]) {
+      if (heelRise != null) {
+        const sev = gradeFromThresholds(
+          heelRise,
+          t.heel_rise_b, t.heel_rise_c, t.heel_rise_d,
+          t.heel_rise_e, t.heel_rise_f,
+          true,
+        );
+        if (sev !== 'A') {
+          findings.push({
+            name: `${side} Heel Rise`,
+            severity: sev,
+            description:
+              `${side.toLowerCase()} heel elevating off the floor during the squat — ` +
+              'suggests limited ankle dorsiflexion, tight calf complex, or weight shifting onto the forefoot',
+            metricValue: Math.round(heelRise * 1000) / 1000,
+            metricLabel: 'heel-ankle offset (tibia-normalised)',
+          });
+        }
+      }
     }
   }
 

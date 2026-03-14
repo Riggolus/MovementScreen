@@ -72,7 +72,7 @@ const LUNGE_DEPTH_THRESHOLD_DEGREES = 105.0;
  * Returns { accepted, depthRatio } so callers can independently track
  * whether the person reached functional depth.
  *
- * Frontal (anterior/posterior):
+ * Anterior (frontal):
  *   Captures any frame where the hip is at least 75% of the way to knee
  *   height — wide enough to catch compensations at shallow depth.
  *   depthRatio = hipNorm / kneeNorm (1.0 = hip level with knee = full depth).
@@ -81,12 +81,12 @@ const LUNGE_DEPTH_THRESHOLD_DEGREES = 105.0;
  *   Uses the 2-D hip-knee-ankle angle. depthRatio = 1.0 when at depth, 0 otherwise.
  *
  * @param {Array}  landmarks    - MediaPipe 33-landmark array
- * @param {string} cameraAngle  - 'anterior' | 'posterior' | 'lateral'
+ * @param {string} cameraAngle  - 'anterior' | 'lateral'
  * @param {string} [lateralSide='left'] - 'left' | 'right' — only used for lateral view
  * @returns {{ accepted: boolean, depthRatio: number }}
  */
 export function acceptFrameSquat(landmarks, cameraAngle, lateralSide = 'left') {
-  if (cameraAngle === 'anterior' || cameraAngle === 'posterior') {
+  if (cameraAngle === 'anterior') {
     const shoulderYs = [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER]
       .filter(idx => vis(landmarks, idx))
       .map(idx => landmarks[idx].y);
@@ -147,7 +147,7 @@ export function acceptFrameSquat(landmarks, cameraAngle, lateralSide = 'left') {
  * lunge knee flexion is large enough to be visible in both frontal and lateral views.
  *
  * @param {Array}  landmarks   - MediaPipe 33-landmark array
- * @param {string} cameraAngle - 'anterior' | 'posterior' | 'lateral'
+ * @param {string} cameraAngle - 'anterior' | 'lateral'
  * @param {string} leadSide    - 'left' | 'right'
  * @returns {boolean}
  */

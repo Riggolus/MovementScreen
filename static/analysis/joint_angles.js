@@ -152,6 +152,8 @@ export function computeJointAngles(landmarks) {
     rightFootPronation: null,
     hipLateralShift:    null,
     shoulderTiltDegrees: null,
+    heelRiseLeft:  null,
+    heelRiseRight: null,
   };
 
   // --- Knee flexion (hip-knee-ankle) ---
@@ -409,6 +411,20 @@ export function computeJointAngles(landmarks) {
     if (horiz > 0.01) {
       const vert = rSh[1] - lSh[1]; // positive = right shoulder lower (y down)
       angles.shoulderTiltDegrees = (Math.atan2(vert, horiz) * 180) / Math.PI;
+    }
+  }
+
+  // --- Heel rise (heel elevation relative to ankle, normalised by tibia length, lateral view) ---
+  // Positive = heel below ankle (normal); near-zero or negative = heel rising off the floor.
+  for (const { heelRiseKey, kneeIdx, ankleIdx, heelIdx } of [
+    { heelRiseKey: 'heelRiseLeft',  kneeIdx: LM.LEFT_KNEE,  ankleIdx: LM.LEFT_ANKLE,  heelIdx: LM.LEFT_HEEL  },
+    { heelRiseKey: 'heelRiseRight', kneeIdx: LM.RIGHT_KNEE, ankleIdx: LM.RIGHT_ANKLE, heelIdx: LM.RIGHT_HEEL },
+  ]) {
+    if (allVisible(landmarks, [kneeIdx, ankleIdx, heelIdx])) {
+      const tibiaLen = landmarks[ankleIdx].y - landmarks[kneeIdx].y; // positive (ankle is below knee in image)
+      if (tibiaLen > 0.01) {
+        angles[heelRiseKey] = (landmarks[heelIdx].y - landmarks[ankleIdx].y) / tibiaLen;
+      }
     }
   }
 

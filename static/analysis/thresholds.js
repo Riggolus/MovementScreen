@@ -172,6 +172,15 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
   gait_tibial_d: 2.0,
   gait_tibial_e: 0.0,
   gait_tibial_f: -3.0,
+
+  // Heel rise — lateral squat; heel-ankle vertical offset normalised by tibia length.
+  // Positive = heel below ankle (normal); near-zero or negative = heel is rising.
+  // Lower is worse.
+  heel_rise_b: 0.03,   // heel nearly level with ankle — slight elevation tendency
+  heel_rise_c: 0.01,   // heel at ankle level — clear rise beginning
+  heel_rise_d: -0.02,  // heel above ankle level — moderate rise
+  heel_rise_e: -0.05,  // significant rise
+  heel_rise_f: -0.08,  // severe / full heel-off
 });
 
 // ---------------------------------------------------------------------------

@@ -37,6 +37,8 @@ const TRACKED_FIELDS = [
   { key: 'rightFootPronation',     field: 'right_foot_pronation',     name: 'Right Foot Pronation' },
   { key: 'hipLateralShift',        field: 'hip_lateral_shift',        name: 'Hip Lateral Shift' },
   { key: 'shoulderTiltDegrees',    field: 'shoulder_tilt_degrees',    name: 'Shoulder Tilt' },
+  { key: 'heelRiseLeft',           field: 'heel_rise_left',           name: 'Heel Rise Left' },
+  { key: 'heelRiseRight',          field: 'heel_rise_right',          name: 'Heel Rise Right' },
 ];
 
 // Fields where LOWER is worse — use 25th percentile
@@ -46,6 +48,7 @@ const MIN_IS_WORSE = new Set([
   'leftAnkleDorsiflexion', 'rightAnkleDorsiflexion',
   'tibialAngleLeft', 'tibialAngleRight',
   'spineSegmentalAngle',
+  'heelRiseLeft', 'heelRiseRight',
 ]);
 
 // Fields where HIGHER is worse — use 75th percentile
