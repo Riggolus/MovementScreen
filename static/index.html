@@ -28,6 +28,9 @@
     </div>
   </header>
 
+  <!-- ── ONBOARDING OVERLAY ──────────────────────────────── -->
+  <div id="onboarding-overlay" class="onboarding-overlay hidden"></div>
+
   <!-- ── MAIN ───────────────────────────────────────────── -->
   <main class="main">
 
@@ -170,6 +173,7 @@
           <p id="position-hint" class="position-hint">Hold still to begin</p>
           <button id="position-skip-btn" class="position-skip-btn">Start anyway</button>
         </div>
+        <div id="debug-overlay" class="debug-overlay hidden"></div>
         <div class="camera-ui">
           <div class="rec-indicator">
             <span class="rec-dot"></span>
@@ -221,6 +225,9 @@
     <!-- ── VIEW: REPORT ─────────────────────────────────── -->
     <div id="view-report" class="view"></div>
 
+    <!-- ── VIEW: SETTINGS ───────────────────────────────── -->
+    <div id="view-settings" class="view"></div>
+
     <!-- ── VIEW: ERROR ──────────────────────────────────── -->
     <div id="view-error" class="view">
       <div class="error-content">
@@ -232,6 +239,8 @@
     </div>
 
   </main>
+
+  <div style="position:fixed;bottom:6px;right:10px;font-size:11px;color:#555;pointer-events:none;z-index:9999">v28</div>
 
   <script type="module" src="/static/app.js"></script>
   <script>

@@ -114,9 +114,16 @@ function round1(v) {
  * @param {string} screenName
  * @returns {{ addFrame: Function, finalize: Function }}
  */
+// Frontal valgus is most visible at depth. Only frames at this depth ratio
+// or above are used for knee frontal angle (valgus) computation, preventing
+// the wide capture gate (0.75) from diluting the peak valgus signal.
+const VALGUS_DEPTH_FRACTION = 0.88;
+
 export function createAggregator(screenName) {
   /** @type {Object[]} */
   const frames = [];
+  // Subset of frames captured at adequate depth — used for valgus only
+  const depthFrames = [];
   let maxDepthRatio = 0;
 
   /**
@@ -126,6 +133,7 @@ export function createAggregator(screenName) {
    */
   function addFrame(angles, depthRatio = 1) {
     frames.push(angles);
+    if (depthRatio >= VALGUS_DEPTH_FRACTION) depthFrames.push(angles);
     if (depthRatio > maxDepthRatio) maxDepthRatio = depthRatio;
   }
 
@@ -171,11 +179,17 @@ export function createAggregator(screenName) {
     // -----------------------------------------------------------------------
     const worst = {};
 
+    // Valgus metrics use only deep frames to avoid dilution from descent/ascent
+    const VALGUS_KEYS = new Set(['leftKneeFrontalAngle', 'rightKneeFrontalAngle']);
+
     for (const { key } of TRACKED_FIELDS) {
       // Skip keys handled specially below (SIGNED_ABS_75TH)
       if (SIGNED_ABS_75TH.has(key)) continue;
 
-      const vals = frames
+      // For valgus: prefer depthFrames; fall back to all frames if none at depth
+      const sourceFrames = VALGUS_KEYS.has(key) && depthFrames.length > 0 ? depthFrames : frames;
+
+      const vals = sourceFrames
         .map(f => f[key])
         .filter(v => v != null)
         .sort((a, b) => a - b);

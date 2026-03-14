@@ -55,7 +55,7 @@ let currentScreen      = 'squat';
 let currentSide        = 'left';
 let currentAngle       = 'anterior';
 let currentLateralSide = 'left'; // which leg is closest to the camera in lateral view
-let facingMode     = 'environment';
+let facingMode     = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'user' : 'environment';
 let mediaStream    = null;
 let isRecording        = false;
 let isPositioning      = false;
@@ -97,8 +97,10 @@ const views = {
   summary:    document.getElementById('view-summary'),
   admin:      document.getElementById('view-admin'),
   report:     document.getElementById('view-report'),
+  settings:   document.getElementById('view-settings'),
   error:      document.getElementById('view-error'),
 };
+const obOverlay = document.getElementById('onboarding-overlay');
 const preview        = document.getElementById('preview');
 const skeletonCanvas = document.getElementById('skeleton-canvas');
 const skeletonCtx    = skeletonCanvas.getContext('2d');
@@ -112,6 +114,7 @@ const nextAngleBtn   = document.getElementById('next-angle-btn');
 const phaseIndicator = document.getElementById('phase-indicator');
 const phaseDots      = document.getElementById('phase-dots');
 const phaseLabel     = document.getElementById('phase-label');
+const debugOverlay   = document.getElementById('debug-overlay');
 
 // ── View helpers ─────────────────────────────────────────
 function showView(name) {
@@ -133,15 +136,15 @@ function updateHeader() {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <span>History</span>
     </button>
-    <button class="nav-btn" id="nav-admin-btn">
+    <button class="nav-btn" id="nav-settings-btn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
-      <span>Thresholds</span>
+      <span>Settings</span>
     </button>
   `;
   document.getElementById('nav-home-btn').addEventListener('click', () => showView('setup'));
   document.getElementById('nav-summary-btn').addEventListener('click', loadSummary);
   document.getElementById('nav-history-btn').addEventListener('click', loadHistory);
-  document.getElementById('nav-admin-btn').addEventListener('click', loadAdminPage);
+  document.getElementById('nav-settings-btn').addEventListener('click', loadSettings);
 }
 
 // ── Assessment instructions ───────────────────────────────
@@ -400,8 +403,11 @@ function beginRecording() {
   recordingFrameCount = 0;
   walkTowardFrames = 0;
   phase3DFrames = 0;
+  debugCapturedFrames = 0;
+  debugDepthFrames = 0;
   document.getElementById('position-overlay').classList.add('hidden');
   nextAngleBtn.classList.add('hidden'); // hidden until minimum frames collected
+  debugOverlay.classList.remove('hidden');
   isRecording = true;
   startTimer();
 }
@@ -432,6 +438,7 @@ function nextAngle() {
     mediaStream?.getTracks().forEach(t => t.stop());
     nextAngleBtn.classList.add('hidden');
     phaseIndicator.classList.add('hidden');
+    debugOverlay.classList.add('hidden');
     showView('processing');
     analyseLocally();
     return;
@@ -467,6 +474,37 @@ function setPositionOverlay(msg, progress) {
   document.getElementById('position-message').textContent = msg;
   document.getElementById('position-bar').style.width = `${Math.round(progress * 100)}%`;
   document.getElementById('position-hint').style.opacity = progress > 0 ? '1' : '0';
+}
+
+// ── Debug overlay ─────────────────────────────────────────
+let debugCapturedFrames = 0;
+let debugDepthFrames    = 0;
+
+function row(label, value, cls = '') {
+  return `<div class="dbg-row"><span class="dbg-label">${label}</span><span class="dbg-val ${cls}">${value}</span></div>`;
+}
+
+function updateDebugOverlay(angles, depthRatio, atDepth, capturedFrames, depthFrameCount) {
+  const fmt = v => (v == null ? '—' : v.toFixed(3));
+  const fmtDeg = v => (v == null ? '—' : v.toFixed(1) + '°');
+
+  const lv = angles.leftKneeFrontalAngle;
+  const rv = angles.rightKneeFrontalAngle;
+  const lCls = lv == null ? '' : lv > 0.10 ? 'bad' : lv > 0.04 ? 'warn' : '';
+  const rCls = rv == null ? '' : rv > 0.10 ? 'bad' : rv > 0.04 ? 'warn' : '';
+
+  const depthCls = atDepth ? 'capturing' : depthRatio >= 0.60 ? 'warn' : '';
+
+  debugOverlay.innerHTML =
+    row('depth ratio', fmt(depthRatio) + (atDepth ? ' ●' : ' ○'), depthCls) +
+    row('captured', `${capturedFrames} (${depthFrameCount}@depth)`) +
+    '<hr class="dbg-sep">' +
+    row('L valgus', fmt(lv), lCls) +
+    row('R valgus', fmt(rv), rCls) +
+    '<hr class="dbg-sep">' +
+    row('trunk lean', fmtDeg(angles.trunkLeanDegrees)) +
+    row('lat shift', fmt(angles.lateralTrunkShift)) +
+    row('pelvic tilt', fmtDeg(angles.pelvicTiltDegrees));
 }
 
 // ── Skeleton loop ─────────────────────────────────────────
@@ -539,7 +577,9 @@ function startSkeletonLoop() {
                 atDepth = r.accepted; depthRatio = r.depthRatio;
               } else if (currentScreen === 'lunge')    atDepth = acceptFrameLunge(lms, currentAngle, currentSide);
               else if (currentScreen === 'overhead') atDepth = acceptFrameOverhead(lms);
-              if (atDepth) { aggregator.addFrame(computeJointAngles(lms), depthRatio); phase3DFrames++; }
+              const angles = computeJointAngles(lms);
+              if (atDepth) { aggregator.addFrame(angles, depthRatio); phase3DFrames++; debugCapturedFrames++; if (depthRatio >= 0.88) debugDepthFrames++; }
+              if (recordingFrameCount % 4 === 0) updateDebugOverlay(angles, depthRatio, atDepth, debugCapturedFrames, debugDepthFrames);
             }
 
             // 3D mode: reveal Next/Finish button once minimum frames collected
@@ -576,6 +616,7 @@ function stopRecording() {
   isRecording = false;
   nextAngleBtn.classList.add('hidden');
   phaseIndicator.classList.add('hidden');
+  debugOverlay.classList.add('hidden');
   // In 3D mode: save current phase aggregator then finalize all
   if (is3D && aggregator) {
     aggregators3D.push({ aggregator, phase: PHASES_3D[phase3DIndex] });
@@ -593,6 +634,7 @@ document.getElementById('cancel-btn').addEventListener('click', () => {
   isRecording = false;
   nextAngleBtn.classList.add('hidden');
   phaseIndicator.classList.add('hidden');
+  debugOverlay.classList.add('hidden');
   mediaStream?.getTracks().forEach(t => t.stop());
   showView('setup');
 });
@@ -1970,6 +2012,399 @@ function renderReport(data, source) {
   showView('report');
 }
 
+// ── Profile ───────────────────────────────────────────────
+const PROFILE_KEY    = 'ms_profile';
+const ONBOARDING_KEY = 'ms_onboarding_done';
+
+function getProfile() {
+  try { return JSON.parse(localStorage.getItem(PROFILE_KEY)) || {}; } catch { return {}; }
+}
+function saveProfile(data) { localStorage.setItem(PROFILE_KEY, JSON.stringify(data)); }
+
+// ── Onboarding ────────────────────────────────────────────
+const TUTORIAL_SLIDES = [
+  {
+    title: 'Position your device',
+    body: 'Place your phone at hip height, about 6–8 feet (2m) away. Prop it against something stable — a chair or water bottle works well.',
+    gifLabel: 'Camera positioning demo',
+    icon: `<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>`,
+  },
+  {
+    title: 'Stand in frame',
+    body: 'Step back until your entire body — head to toes — is clearly visible. Even lighting significantly improves detection accuracy.',
+    gifLabel: 'Full body framing demo',
+    icon: `<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><path d="M12 6v5"/><path d="M9 11l-2 6"/><path d="M15 11l2 6"/><path d="M9 17h6"/><path d="M9 11l-2-2"/><path d="M15 11l2-2"/></svg>`,
+  },
+  {
+    title: 'Perform the movement',
+    body: 'Select an assessment, then perform 3–5 slow, controlled reps. Tap Stop when finished — your results appear instantly on-device.',
+    gifLabel: 'Movement recording demo',
+    icon: `<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/></svg>`,
+  },
+  {
+    title: 'Your data stays private',
+    body: 'All analysis happens on your device. Nothing is ever uploaded or shared. Your assessments are stored locally and belong only to you.',
+    gifLabel: 'Privacy illustration',
+    icon: `<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>`,
+  },
+];
+
+function showOnboarding() {
+  let step = 0; // 0=disclaimer, 1=profile, 2..=tutorial
+
+  function render() {
+    obOverlay.innerHTML = '';
+    if (step === 0)      renderDisclaimer();
+    else if (step === 1) renderProfile();
+    else                 renderTutorial(step - 2);
+  }
+
+  function renderDisclaimer() {
+    obOverlay.innerHTML = `
+      <div class="ob-page ob-disclaimer">
+        <div class="ob-logo-mark">
+          <span class="logo-mark" aria-hidden="true"></span>
+          <span class="ob-app-name">MovementScreen</span>
+        </div>
+        <div class="ob-disclaimer-content">
+          <h1>Welcome</h1>
+          <p>MovementScreen uses your camera and on-device AI to screen movement patterns and detect potential compensation strategies.</p>
+          <div class="ob-disclaimer-box">
+            <p><strong>Not a medical device.</strong> This app does not provide medical diagnoses or treatment recommendations. Always consult a qualified healthcare professional before changing your training or rehabilitation programme.</p>
+          </div>
+          <p class="ob-privacy-note">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            All data stays on your device. Nothing is uploaded.
+          </p>
+        </div>
+        <div class="ob-actions">
+          <button class="btn-primary ob-wide-btn" id="ob-accept">I understand &amp; agree</button>
+          <p class="ob-sub-note">By continuing you accept these terms of use.</p>
+        </div>
+      </div>
+    `;
+    document.getElementById('ob-accept').addEventListener('click', () => { step = 1; render(); });
+  }
+
+  function renderProfile() {
+    const p = getProfile();
+    let unit = 'cm';
+    let selectedSex = p.sex || '';
+    let selectedAge = p.ageRange || '';
+
+    obOverlay.innerHTML = `
+      <div class="ob-page ob-profile-page">
+        <button class="ob-back" id="ob-back" aria-label="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <div class="ob-profile-content">
+          <h1>About you</h1>
+          <p class="ob-profile-sub">Helps calibrate your assessment accuracy.</p>
+          <div class="ob-form">
+            <div class="ob-field">
+              <label for="ob-name">Name</label>
+              <input type="text" id="ob-name" placeholder="Your name" value="${p.name || ''}" autocomplete="given-name" />
+            </div>
+            <div class="ob-field">
+              <label>Height</label>
+              <div class="ob-unit-toggle" id="ob-unit-toggle">
+                <button class="ob-unit-btn active" data-unit="cm">cm</button>
+                <button class="ob-unit-btn" data-unit="ft">ft / in</button>
+              </div>
+              <div id="ob-height-cm-wrap" class="ob-height-wrap">
+                <input type="number" id="ob-height-cm" placeholder="175" min="100" max="250" value="${p.heightCm ? Math.round(p.heightCm) : ''}" inputmode="numeric" />
+                <span class="ob-unit-label">cm</span>
+              </div>
+              <div id="ob-height-ft-wrap" class="ob-height-wrap hidden">
+                <input type="number" id="ob-height-ft" placeholder="5" min="3" max="8" inputmode="numeric" />
+                <span class="ob-unit-label">ft</span>
+                <input type="number" id="ob-height-in" placeholder="9" min="0" max="11" inputmode="numeric" />
+                <span class="ob-unit-label">in</span>
+              </div>
+            </div>
+            <div class="ob-field">
+              <label>Biological sex <span class="ob-opt">(optional)</span></label>
+              <div class="ob-chip-row" id="ob-sex-chips">
+                <button class="ob-chip${selectedSex === 'male' ? ' active' : ''}" data-val="male">Male</button>
+                <button class="ob-chip${selectedSex === 'female' ? ' active' : ''}" data-val="female">Female</button>
+                <button class="ob-chip${!selectedSex ? ' active' : ''}" data-val="">Prefer not to say</button>
+              </div>
+            </div>
+            <div class="ob-field">
+              <label>Age range <span class="ob-opt">(optional)</span></label>
+              <div class="ob-chip-row" id="ob-age-chips">
+                ${['Under 18','18–29','30–39','40–49','50–59','60+'].map(a =>
+                  `<button class="ob-chip${selectedAge === a ? ' active' : ''}" data-val="${a}">${a}</button>`
+                ).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="ob-actions">
+          <button class="btn-primary ob-wide-btn" id="ob-profile-next">Continue</button>
+          <button class="ob-text-btn" id="ob-skip-profile">Skip for now</button>
+        </div>
+      </div>
+    `;
+
+    obOverlay.querySelectorAll('#ob-unit-toggle .ob-unit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        obOverlay.querySelectorAll('#ob-unit-toggle .ob-unit-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        unit = btn.dataset.unit;
+        document.getElementById('ob-height-cm-wrap').classList.toggle('hidden', unit !== 'cm');
+        document.getElementById('ob-height-ft-wrap').classList.toggle('hidden', unit !== 'ft');
+      });
+    });
+    obOverlay.querySelectorAll('#ob-sex-chips .ob-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        obOverlay.querySelectorAll('#ob-sex-chips .ob-chip').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active'); selectedSex = btn.dataset.val;
+      });
+    });
+    obOverlay.querySelectorAll('#ob-age-chips .ob-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        obOverlay.querySelectorAll('#ob-age-chips .ob-chip').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active'); selectedAge = btn.dataset.val;
+      });
+    });
+
+    function collectAndSave() {
+      const name = document.getElementById('ob-name').value.trim();
+      let heightCm = null;
+      if (unit === 'cm') {
+        const v = parseFloat(document.getElementById('ob-height-cm').value);
+        if (!isNaN(v) && v > 0) heightCm = v;
+      } else {
+        const ft = parseFloat(document.getElementById('ob-height-ft').value) || 0;
+        const ins = parseFloat(document.getElementById('ob-height-in').value) || 0;
+        if (ft > 0) heightCm = Math.round((ft * 12 + ins) * 2.54);
+      }
+      saveProfile({ name, heightCm, sex: selectedSex || null, ageRange: selectedAge || null });
+    }
+
+    document.getElementById('ob-profile-next').addEventListener('click', () => { collectAndSave(); step = 2; render(); });
+    document.getElementById('ob-skip-profile').addEventListener('click', () => { step = 2; render(); });
+    document.getElementById('ob-back').addEventListener('click', () => { step = 0; render(); });
+  }
+
+  function renderTutorial(slideIdx, onDone) {
+    const slide    = TUTORIAL_SLIDES[slideIdx];
+    const isLast   = slideIdx === TUTORIAL_SLIDES.length - 1;
+    const total    = TUTORIAL_SLIDES.length;
+    const doneCallback = onDone || complete;
+
+    obOverlay.innerHTML = `
+      <div class="ob-page ob-tutorial-page">
+        <button class="ob-skip-link" id="ob-skip-tut">Skip</button>
+        <div class="ob-slide-media">
+          <div class="ob-gif-box">
+            ${slide.icon}
+            <span class="ob-gif-label">${slide.gifLabel}</span>
+          </div>
+        </div>
+        <div class="ob-slide-body">
+          <div class="ob-dots">
+            ${Array.from({ length: total }, (_, i) =>
+              `<span class="ob-dot${i === slideIdx ? ' active' : ''}"></span>`
+            ).join('')}
+          </div>
+          <h2>${slide.title}</h2>
+          <p>${slide.body}</p>
+        </div>
+        <div class="ob-actions ob-slide-actions">
+          <button class="btn-ghost" id="ob-prev">← Back</button>
+          <button class="btn-primary" id="ob-next">${isLast ? 'Get Started' : 'Next →'}</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('ob-skip-tut').addEventListener('click', doneCallback);
+    document.getElementById('ob-prev').addEventListener('click', () => {
+      if (slideIdx === 0 && !onDone) { step = 1; render(); }
+      else if (slideIdx > 0) { step--; render(); }
+      else doneCallback();
+    });
+    document.getElementById('ob-next').addEventListener('click', () => {
+      if (isLast) doneCallback();
+      else { step++; render(); }
+    });
+  }
+
+  function complete() {
+    localStorage.setItem(ONBOARDING_KEY, '1');
+    obOverlay.classList.add('hidden');
+  }
+
+  obOverlay.classList.remove('hidden');
+  render();
+}
+
+function showTutorialOnly(onDone) {
+  let slideIdx = 0;
+  const done = onDone || (() => obOverlay.classList.add('hidden'));
+
+  function render() {
+    const slide  = TUTORIAL_SLIDES[slideIdx];
+    const isLast = slideIdx === TUTORIAL_SLIDES.length - 1;
+    const total  = TUTORIAL_SLIDES.length;
+
+    obOverlay.innerHTML = `
+      <div class="ob-page ob-tutorial-page">
+        <button class="ob-skip-link" id="ob-skip-tut">Skip</button>
+        <div class="ob-slide-media">
+          <div class="ob-gif-box">
+            ${slide.icon}
+            <span class="ob-gif-label">${slide.gifLabel}</span>
+          </div>
+        </div>
+        <div class="ob-slide-body">
+          <div class="ob-dots">
+            ${Array.from({ length: total }, (_, i) =>
+              `<span class="ob-dot${i === slideIdx ? ' active' : ''}"></span>`
+            ).join('')}
+          </div>
+          <h2>${slide.title}</h2>
+          <p>${slide.body}</p>
+        </div>
+        <div class="ob-actions ob-slide-actions">
+          ${slideIdx > 0 ? `<button class="btn-ghost" id="ob-prev">← Back</button>` : `<div style="flex:1"></div>`}
+          <button class="btn-primary" id="ob-next">${isLast ? 'Done' : 'Next →'}</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('ob-skip-tut').addEventListener('click', done);
+    if (slideIdx > 0) document.getElementById('ob-prev').addEventListener('click', () => { slideIdx--; render(); });
+    document.getElementById('ob-next').addEventListener('click', () => {
+      if (isLast) done();
+      else { slideIdx++; render(); }
+    });
+  }
+
+  obOverlay.classList.remove('hidden');
+  render();
+}
+
+// ── Settings ──────────────────────────────────────────────
+function loadSettings() {
+  const p = getProfile();
+  let unit = 'cm';
+  let selectedSex = p.sex || '';
+  let selectedAge = p.ageRange || '';
+
+  views.settings.innerHTML = `
+    <div class="settings-wrap">
+      <h2 class="settings-title">Settings</h2>
+
+      <div class="settings-section">
+        <p class="settings-section-title">Profile</p>
+        <div class="ob-form">
+          <div class="ob-field">
+            <label for="s-name">Name</label>
+            <input type="text" id="s-name" value="${p.name || ''}" placeholder="Your name" autocomplete="given-name" />
+          </div>
+          <div class="ob-field">
+            <label>Height</label>
+            <div class="ob-unit-toggle" id="s-unit-toggle">
+              <button class="ob-unit-btn active" data-unit="cm">cm</button>
+              <button class="ob-unit-btn" data-unit="ft">ft / in</button>
+            </div>
+            <div id="s-height-cm-wrap" class="ob-height-wrap">
+              <input type="number" id="s-height-cm" placeholder="175" min="100" max="250" value="${p.heightCm ? Math.round(p.heightCm) : ''}" inputmode="numeric" />
+              <span class="ob-unit-label">cm</span>
+            </div>
+            <div id="s-height-ft-wrap" class="ob-height-wrap hidden">
+              <input type="number" id="s-height-ft" placeholder="5" min="3" max="8" inputmode="numeric" />
+              <span class="ob-unit-label">ft</span>
+              <input type="number" id="s-height-in" placeholder="9" min="0" max="11" inputmode="numeric" />
+              <span class="ob-unit-label">in</span>
+            </div>
+          </div>
+          <div class="ob-field">
+            <label>Biological sex <span class="ob-opt">(optional)</span></label>
+            <div class="ob-chip-row" id="s-sex-chips">
+              <button class="ob-chip${selectedSex === 'male' ? ' active' : ''}" data-val="male">Male</button>
+              <button class="ob-chip${selectedSex === 'female' ? ' active' : ''}" data-val="female">Female</button>
+              <button class="ob-chip${!selectedSex ? ' active' : ''}" data-val="">Prefer not to say</button>
+            </div>
+          </div>
+          <div class="ob-field">
+            <label>Age range <span class="ob-opt">(optional)</span></label>
+            <div class="ob-chip-row" id="s-age-chips">
+              ${['Under 18','18–29','30–39','40–49','50–59','60+'].map(a =>
+                `<button class="ob-chip${selectedAge === a ? ' active' : ''}" data-val="${a}">${a}</button>`
+              ).join('')}
+            </div>
+          </div>
+          <button class="btn-primary" id="s-save-profile">Save Profile</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <p class="settings-section-title">Tutorial</p>
+        <p class="settings-section-desc">Watch the getting started walkthrough again.</p>
+        <button class="btn-ghost" id="s-replay-tutorial">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Replay Tutorial
+        </button>
+      </div>
+
+      <div class="settings-section">
+        <p class="settings-section-title">Threshold Calibration</p>
+        <p class="settings-section-desc">Customise the sensitivity of compensation detection.</p>
+        <button class="btn-ghost" id="s-open-thresholds">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+          Open Thresholds
+        </button>
+      </div>
+    </div>
+  `;
+
+  views.settings.querySelectorAll('#s-unit-toggle .ob-unit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      views.settings.querySelectorAll('#s-unit-toggle .ob-unit-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      unit = btn.dataset.unit;
+      document.getElementById('s-height-cm-wrap').classList.toggle('hidden', unit !== 'cm');
+      document.getElementById('s-height-ft-wrap').classList.toggle('hidden', unit !== 'ft');
+    });
+  });
+  views.settings.querySelectorAll('#s-sex-chips .ob-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      views.settings.querySelectorAll('#s-sex-chips .ob-chip').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active'); selectedSex = btn.dataset.val;
+    });
+  });
+  views.settings.querySelectorAll('#s-age-chips .ob-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      views.settings.querySelectorAll('#s-age-chips .ob-chip').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active'); selectedAge = btn.dataset.val;
+    });
+  });
+
+  document.getElementById('s-save-profile').addEventListener('click', () => {
+    const name = document.getElementById('s-name').value.trim();
+    let heightCm = p.heightCm || null;
+    if (unit === 'cm') {
+      const v = parseFloat(document.getElementById('s-height-cm').value);
+      if (!isNaN(v) && v > 0) heightCm = v;
+    } else {
+      const ft = parseFloat(document.getElementById('s-height-ft').value) || 0;
+      const ins = parseFloat(document.getElementById('s-height-in').value) || 0;
+      if (ft > 0) heightCm = Math.round((ft * 12 + ins) * 2.54);
+    }
+    saveProfile({ name, heightCm, sex: selectedSex || null, ageRange: selectedAge || null });
+    showToast('Profile saved');
+  });
+
+  document.getElementById('s-replay-tutorial').addEventListener('click', () => {
+    showTutorialOnly(() => { obOverlay.classList.add('hidden'); showView('settings'); });
+  });
+  document.getElementById('s-open-thresholds').addEventListener('click', loadAdminPage);
+
+  showView('settings');
+}
+
 // ── Boot ─────────────────────────────────────────────────
 updateHeader();
+if (!localStorage.getItem(ONBOARDING_KEY)) { showOnboarding(); }
 showView('setup');

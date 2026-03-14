@@ -8,7 +8,10 @@
       "Bash(gh api:*)",
       "WebFetch(domain:github.com)",
       "Bash(curl -s -H \"Authorization: Bearer rnd_k5MdOzXu3CzfpCAJMfEPkQzOAA6H\" \"https://api.render.com/v1/owners?limit=1\")",
-      "Bash(where py:*)"
+      "Bash(where py:*)",
+      "Bash(cd C:/Users/nknap/workspace/MovementScreen/MovementScreen && node -e \"\nconst fs = require\\('fs'\\);\nconst buf = fs.readFileSync\\('static/index.html'\\);\nlet count = 0;\nfor \\(let i = 0; i < buf.length - 1; i++\\) {\n  if \\(buf[i] === 0x5C && buf[i+1] === 0x6E\\) {  // backslash + n\n    count++;\n    if \\(count <= 3\\) {\n      console.log\\('At byte', i, ':', JSON.stringify\\(buf.slice\\(Math.max\\(0,i-30\\), i+40\\).toString\\(\\)\\)\\);\n    }\n  }\n}\nconsole.log\\('Total literal backslash-n:', count\\);\n\")",
+      "Bash(cd C:/Users/nknap/workspace/MovementScreen/MovementScreen && node -e \"\nconst fs = require\\('fs'\\);\nconst buf = fs.readFileSync\\('static/index.html'\\);\n// Show raw bytes around the problem area\nconst slice = buf.slice\\(14920, 15060\\);\nconsole.log\\(slice.toString\\('utf8'\\)\\);\n\")",
+      "Bash(cd C:/Users/nknap/workspace/MovementScreen/MovementScreen && node -e \"\nconst fs = require\\('fs'\\);\nconst buf = fs.readFileSync\\('static/app.js'\\);\nlet count = 0;\nconst positions = [];\nfor \\(let i = 0; i < buf.length - 1; i++\\) {\n  if \\(buf[i] === 0x5C && buf[i+1] === 0x6E\\) {\n    count++;\n    positions.push\\(i\\);\n  }\n}\nconsole.log\\('Total literal \\\\\\\\\\\\\\\\n in app.js:', count\\);\npositions.slice\\(0, 5\\).forEach\\(p => {\n  console.log\\('At', p, ':', JSON.stringify\\(buf.slice\\(Math.max\\(0,p-30\\), p+40\\).toString\\(\\)\\)\\);\n}\\);\n\")"
     ]
   }
 }

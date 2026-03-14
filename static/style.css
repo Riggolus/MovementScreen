@@ -281,6 +281,20 @@ body {
 #skeleton-canvas {
   position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
 }
+.debug-overlay {
+  position: absolute; top: 10px; left: 10px; z-index: 20;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  border-radius: 8px; padding: 8px 10px;
+  font-family: monospace; font-size: 11px; line-height: 1.7;
+  color: #e5e7eb; pointer-events: none; min-width: 180px;
+}
+.debug-overlay .dbg-row { display: flex; justify-content: space-between; gap: 12px; }
+.debug-overlay .dbg-label { color: #9ca3af; }
+.debug-overlay .dbg-val   { color: #f9fafb; font-weight: 700; }
+.debug-overlay .dbg-val.capturing { color: #6ee7b7; }
+.debug-overlay .dbg-val.warn      { color: #fbbf24; }
+.debug-overlay .dbg-val.bad       { color: #f87171; }
+.debug-overlay .dbg-sep { border: none; border-top: 1px solid rgba(255,255,255,.1); margin: 4px 0; }
 .camera-ui {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: space-between;
@@ -1110,3 +1124,174 @@ body {
   color: var(--text-muted);
   margin: 0;
 }
+
+/* ── Onboarding Overlay ─────────────────────────────────── */
+.onboarding-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+.onboarding-overlay.hidden { display: none !important; }
+
+.ob-page {
+  flex: 1; display: flex; flex-direction: column;
+  min-height: 100dvh;
+  max-width: 480px; width: 100%; margin: 0 auto;
+}
+
+/* ── Disclaimer ─────────────────────────────────────────── */
+.ob-disclaimer { padding: 52px 24px 36px; justify-content: space-between; }
+.ob-logo-mark {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 700; font-size: 18px; letter-spacing: -.4px;
+  margin-bottom: 48px;
+}
+.ob-app-name { font-weight: 700; font-size: 18px; }
+.ob-disclaimer-content { flex: 1; }
+.ob-disclaimer-content h1 {
+  font-size: 34px; font-weight: 800; letter-spacing: -1px;
+  line-height: 1.1; margin-bottom: 18px;
+}
+.ob-disclaimer-content > p {
+  font-size: 15px; line-height: 1.65; color: var(--text-2); margin-bottom: 16px;
+}
+.ob-disclaimer-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 16px 18px; margin: 22px 0;
+  box-shadow: var(--shadow-sm);
+}
+.ob-disclaimer-box p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text); }
+.ob-privacy-note {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; color: var(--text-3); margin-top: 6px;
+}
+.ob-actions { padding-top: 28px; }
+.ob-wide-btn { width: 100%; justify-content: center; }
+.ob-sub-note {
+  text-align: center; font-size: 12px; color: var(--text-3); margin-top: 10px;
+}
+
+/* ── Profile Page ───────────────────────────────────────── */
+.ob-profile-page { padding-bottom: 36px; }
+.ob-back {
+  display: flex; align-items: center;
+  padding: 16px 20px; background: none; border: none;
+  cursor: pointer; color: var(--text-2); align-self: flex-start;
+  transition: color .15s;
+}
+.ob-back:hover { color: var(--text); }
+.ob-profile-content { flex: 1; padding: 8px 24px 0; overflow-y: auto; }
+.ob-profile-content h1 {
+  font-size: 28px; font-weight: 800; letter-spacing: -.8px;
+  line-height: 1.2; margin-bottom: 6px;
+}
+.ob-profile-sub { font-size: 14px; color: var(--text-3); margin-bottom: 28px; }
+.ob-profile-page .ob-actions { padding: 0 24px; }
+.ob-text-btn {
+  width: 100%; background: none; border: none;
+  color: var(--text-3); font-size: 14px; font-weight: 500;
+  padding: 14px; cursor: pointer; text-align: center;
+  transition: color .15s;
+}
+.ob-text-btn:hover { color: var(--text); }
+
+/* ── Shared Form Elements (onboarding + settings) ──────── */
+.ob-form { display: flex; flex-direction: column; gap: 22px; margin-bottom: 28px; }
+.ob-field { display: flex; flex-direction: column; gap: 8px; }
+.ob-field > label {
+  font-size: 12px; font-weight: 600; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.ob-opt { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-3); font-size: 11px; }
+.ob-field input[type="text"],
+.ob-field input[type="number"] {
+  height: 50px; padding: 0 16px;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); font-size: 16px; color: var(--text);
+  font-family: inherit; outline: none; transition: border-color .15s;
+  -webkit-appearance: none;
+}
+.ob-field input:focus { border-color: var(--primary); }
+.ob-unit-toggle { display: flex; gap: 6px; margin-bottom: 4px; }
+.ob-unit-btn {
+  padding: 7px 16px; border-radius: 50px;
+  border: 1.5px solid var(--border); background: var(--surface);
+  font-size: 13px; font-weight: 500; color: var(--text-2);
+  cursor: pointer; transition: all .15s; font-family: inherit;
+}
+.ob-unit-btn.active { border-color: var(--primary); background: var(--primary); color: #fff; }
+.ob-height-wrap { display: flex; align-items: center; gap: 10px; }
+.ob-height-wrap input { flex: 1; }
+.ob-unit-label { font-size: 14px; font-weight: 500; color: var(--text-3); white-space: nowrap; }
+.ob-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.ob-chip {
+  padding: 8px 16px; border-radius: 50px;
+  border: 1.5px solid var(--border); background: var(--surface);
+  font-size: 14px; font-weight: 500; color: var(--text-2);
+  cursor: pointer; transition: all .15s; font-family: inherit;
+}
+.ob-chip.active { border-color: var(--primary); background: var(--primary); color: #fff; }
+.ob-chip:hover:not(.active) { border-color: var(--text-3); color: var(--text); }
+
+/* ── Tutorial Slides ────────────────────────────────────── */
+.ob-tutorial-page { padding: 0; position: relative; }
+.ob-skip-link {
+  position: absolute; top: 14px; right: 16px;
+  background: none; border: none;
+  font-size: 14px; font-weight: 500; color: var(--text-3);
+  cursor: pointer; padding: 8px; z-index: 1; font-family: inherit;
+  transition: color .15s;
+}
+.ob-skip-link:hover { color: var(--text); }
+.ob-slide-media {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); min-height: 46dvh;
+  border-bottom: 1px solid var(--border);
+}
+.ob-gif-box {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  color: var(--text-3); padding: 24px;
+}
+.ob-gif-label { font-size: 13px; font-weight: 500; color: var(--text-3); text-align: center; }
+.ob-slide-body { padding: 28px 24px 8px; flex: 1; }
+.ob-dots { display: flex; gap: 6px; margin-bottom: 20px; }
+.ob-dot {
+  height: 6px; width: 6px; border-radius: 50%;
+  background: var(--border); transition: all .25s cubic-bezier(.22,.68,0,1.2);
+}
+.ob-dot.active { width: 20px; border-radius: 3px; background: var(--primary); }
+.ob-slide-body h2 {
+  font-size: 24px; font-weight: 800; letter-spacing: -.5px;
+  line-height: 1.2; margin-bottom: 10px;
+}
+.ob-slide-body p { font-size: 15px; color: var(--text-2); line-height: 1.65; }
+.ob-slide-actions {
+  display: flex; gap: 10px; padding: 16px 24px 40px;
+}
+.ob-slide-actions .btn-ghost {
+  flex: 1; flex-direction: row; font-size: 15px; font-weight: 500;
+  justify-content: center; padding: 16px; border-radius: 50px;
+  border: 1.5px solid var(--border); color: var(--text-2);
+}
+.ob-slide-actions .btn-primary { flex: 2; }
+
+/* ── Settings View ──────────────────────────────────────── */
+.settings-wrap { padding: 28px 0 48px; }
+.settings-title {
+  font-size: 28px; font-weight: 800; letter-spacing: -.7px; margin-bottom: 24px;
+}
+.settings-section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); padding: 22px 20px; margin-bottom: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.settings-section-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.settings-section-desc { font-size: 13px; color: var(--text-3); margin-bottom: 16px; }
+.settings-section .btn-ghost {
+  flex-direction: row; font-size: 14px; font-weight: 500;
+  padding: 10px 16px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--border); color: var(--text-2);
+  justify-content: flex-start; width: auto; gap: 8px;
+}
+.settings-section .btn-primary { margin-top: 16px; }
