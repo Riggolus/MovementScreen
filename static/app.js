@@ -161,16 +161,17 @@ const SCREEN_INSTRUCTIONS = {
     camera: 'Anterior view: best for knee valgus and trunk shift. Lateral view: best for ankle mobility and trunk lean.',
   },
   lunge: {
-    title: 'Forward Lunge',
-    desc: (side) => `Step forward with your <strong>${side}</strong> foot into a lunge. Lower your rear knee toward the ground, keeping your front shin as vertical as possible and your torso upright.`,
+    title: 'Split Squat',
+    desc: (side) => `Stand in a staggered stance with your <strong>${side}</strong> foot forward. Lower straight down by bending both knees, keeping your front shin as vertical as possible and your torso upright. Do not step — both feet stay planted throughout.`,
     cues: (side) => [
-      `Step forward with your ${side} foot`,
-      'Keep your front shin vertical — knee over ankle',
-      'Lower your rear knee toward (not onto) the floor',
+      `${side.charAt(0).toUpperCase() + side.slice(1)} foot forward, rear foot back — feet stay planted`,
+      'Lower straight down — do not step or lunge forward',
+      'Keep your front shin vertical — knee tracking over ankle',
+      'Rear knee lowers toward (not onto) the floor',
       'Keep your torso upright — avoid leaning forward',
       'Push back to start and perform 3–5 controlled reps',
     ],
-    camera: 'Anterior view recommended for knee tracking and trunk shift.',
+    camera: 'Stand 1.5–2 m from the phone so your full body stays in frame at the bottom of the movement. Anterior view: best for knee tracking and trunk shift. Lateral view: best for ankle mobility and trunk lean.',
   },
   overhead: {
     title: 'Overhead Reach',
@@ -360,7 +361,7 @@ async function startRecording() {
   preview.style.transform        = mirrored ? 'scaleX(-1)' : '';
   skeletonCanvas.style.transform = mirrored ? 'scaleX(-1)' : '';
 
-  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Forward Lunge', overhead: 'Overhead Reach', gait: 'Gait Analysis' };
+  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Split Squat', overhead: 'Overhead Reach', gait: 'Gait Analysis' };
 
   // Initialise 3D or single-angle mode
   if (is3D) {
@@ -450,7 +451,7 @@ function nextAngle() {
   currentLateralSide = phase.lateralSide ?? currentLateralSide;
 
   // Create aggregator for new phase
-  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Forward Lunge', overhead: 'Overhead Reach' };
+  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Split Squat', overhead: 'Overhead Reach' };
   aggregator = createAggregator(SCREEN_NAMES[currentScreen] || currentScreen);
 
   // Transition: stop recording, restart positioning for new angle
@@ -672,7 +673,7 @@ function merge3DResults(phaseResults, screenType) {
   let worstSeverity = 'A';
   let frameCount = 0;
   const stats = [];
-  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Forward Lunge', overhead: 'Overhead Reach' };
+  const SCREEN_NAMES = { squat: 'Bodyweight Squat', lunge: 'Split Squat', overhead: 'Overhead Reach' };
 
   for (const r of phaseResults) {
     frameCount += r.frame_count;
@@ -1754,7 +1755,7 @@ const DIRECT_CALIB_GROUPS = [
     keys: ['gait_tibial_b',       'gait_tibial_c',       'gait_tibial_d'      ] },
 ];
 
-const THRESH_FILTER_LABELS = { all: 'All', squat: 'Squat', lunge: 'Lunge', overhead: 'Overhead', gait: 'Gait' };
+const THRESH_FILTER_LABELS = { all: 'All', squat: 'Squat', lunge: 'Split Squat', overhead: 'Overhead', gait: 'Gait' };
 const THRESH_VIEW_LABELS   = { all: 'All', anterior: 'Anterior', lateral: 'Lateral' };
 
 /**
