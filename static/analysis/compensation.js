@@ -162,24 +162,26 @@ export function detectCompensations(
       }
     }
 
-    // 2. Lateral trunk shift
-    //    Only valid from frontal view. Higher abs shift = worse.
-    if (angles.lateralTrunkShift != null) {
-      const shift = Math.abs(angles.lateralTrunkShift);
+    // 2. Lateral trunk flexion (frontal-plane spine angle from vertical, in degrees)
+    //    More robust than raw shift — normalises by trunk height so it is stable
+    //    across camera distances. Higher = worse.
+    if (angles.lateralFlexionDegrees != null) {
       const sev = gradeFromThresholds(
-        shift,
-        t.lateral_shift_b, t.lateral_shift_c, t.lateral_shift_d,
-        t.lateral_shift_e, t.lateral_shift_f,
+        angles.lateralFlexionDegrees,
+        t.lateral_flexion_b, t.lateral_flexion_c, t.lateral_flexion_d,
+        t.lateral_flexion_e, t.lateral_flexion_f,
         false,
       );
       if (sev !== 'A') {
-        const direction = angles.lateralTrunkShift > 0 ? 'right' : 'left';
+        const direction = angles.lateralTrunkShift != null
+          ? (angles.lateralTrunkShift > 0 ? 'right' : 'left')
+          : '';
         findings.push({
-          name: `Lateral Trunk Shift (${direction})`,
+          name: `Lateral Trunk Flexion${direction ? ` (${direction})` : ''}`,
           severity: sev,
-          description: `shoulders shifted laterally toward the ${direction} relative to hips`,
-          metricValue: Math.round(shift * 1000) / 1000,
-          metricLabel: 'shift (normalized)',
+          description: `trunk angled laterally${direction ? ` toward the ${direction}` : ''} — shoulder midpoint displaced from hip midpoint in the frontal plane`,
+          metricValue: Math.round(angles.lateralFlexionDegrees * 10) / 10,
+          metricLabel: 'lateral flexion (deg)',
         });
       }
     }

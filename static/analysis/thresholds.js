@@ -20,11 +20,11 @@
 export const DEFAULT_THRESHOLDS = Object.freeze({
   // Knee valgus: medial deviation of knee from hip-ankle line, normalised by hip width.
   // Positive = valgus (knee collapses inward); higher = worse.
-  knee_valgus_b: 0.02,   // ~2 % hip-width — barely detectable
-  knee_valgus_c: 0.05,   // ~5 % — noticeable inward tracking
-  knee_valgus_d: 0.10,   // ~10 % — clinically significant
-  knee_valgus_e: 0.15,   // ~15 % — marked collapse
-  knee_valgus_f: 0.20,   // ~20 % — major collapse
+  knee_valgus_b: 0.015,  // ~1.5 % hip-width — subtle but detectable with full model
+  knee_valgus_c: 0.04,   // ~4 % — noticeable inward tracking
+  knee_valgus_d: 0.08,   // ~8 % — clinically significant
+  knee_valgus_e: 0.13,   // ~13 % — marked collapse
+  knee_valgus_f: 0.18,   // ~18 % — major collapse
 
   // Forward trunk lean (higher is worse)
   trunk_lean_b: 15.0,
@@ -55,11 +55,13 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
   asymmetry_f: 0.35,
 
   // Lateral spinal flexion — degrees (higher is worse)
-  lateral_flexion_b: 3.0,
-  lateral_flexion_c: 5.0,
-  lateral_flexion_d: 10.0,
-  lateral_flexion_e: 12.5,
-  lateral_flexion_f: 15.0,
+  // Used for frontal-view check (replaces raw lateral shift metric).
+  // Full model noise floor ~0.5°; Grade B set to catch subtle compensations.
+  lateral_flexion_b: 2.0,
+  lateral_flexion_c: 3.5,
+  lateral_flexion_d: 7.0,
+  lateral_flexion_e: 10.0,
+  lateral_flexion_f: 13.0,
 
   // Spine segmental curvature — deviation from 180° (higher is worse)
   spine_curve_b: 7.0,
@@ -99,12 +101,12 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
   tibial_angle_f: 10.0,
 
   // Pelvic tilt from horizontal — anterior view (higher is worse)
-  // 2D landmark noise at typical resolutions is ~1-3°, so Grade B starts at 5°.
-  pelvic_tilt_b: 5.0,
-  pelvic_tilt_c: 7.0,
-  pelvic_tilt_d: 10.0,
-  pelvic_tilt_e: 13.0,
-  pelvic_tilt_f: 16.0,
+  // Full model noise floor ~0.5–1°; Grade B lowered to catch subtle hip drops.
+  pelvic_tilt_b: 3.0,
+  pelvic_tilt_c: 5.0,
+  pelvic_tilt_d: 8.0,
+  pelvic_tilt_e: 11.0,
+  pelvic_tilt_f: 14.0,
 
   // Gait — swing-phase knee angle (minimum = peak flexion; higher = stiff leg = worse)
   // Normal peak swing knee flexion: ~60–80°. Higher value = knee not bending enough.
