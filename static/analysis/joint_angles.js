@@ -148,6 +148,12 @@ export function computeJointAngles(landmarks) {
     upperTrunkAngle: null,
     spineSegmentalAngle: null,
     headForwardOffset: null,
+    leftFootPronation:  null,
+    rightFootPronation: null,
+    hipLateralShift:    null,
+    shoulderTiltDegrees: null,
+    heelRiseLeft:  null,
+    heelRiseRight: null,
   };
 
   // --- Knee flexion (hip-knee-ankle) ---
@@ -327,6 +333,37 @@ export function computeJointAngles(landmarks) {
     }
   }
 
+  // --- Foot frontal deviation (pronation / supination proxy, anterior view) ---
+  // Measures the horizontal deviation of the heel relative to the ankle.
+  // Positive = heel medial to ankle = pronation (arch collapse / eversion).
+  // Negative = heel lateral to ankle = supination (inversion).
+  // Normalised by hip width for consistency with the knee valgus metric.
+  if (bilateralVisible(landmarks, LM.LEFT_HIP, LM.RIGHT_HIP)) {
+    const hipWidthFoot = Math.abs(
+      landmarks[LM.LEFT_HIP].x - landmarks[LM.RIGHT_HIP].x,
+    );
+    if (hipWidthFoot > 0.01) {
+      for (const { side, ankleIdx, heelIdx } of [
+        { side: 'left',  ankleIdx: LM.LEFT_ANKLE,  heelIdx: LM.LEFT_HEEL  },
+        { side: 'right', ankleIdx: LM.RIGHT_ANKLE, heelIdx: LM.RIGHT_HEEL },
+      ]) {
+        if (allVisible(landmarks, [ankleIdx, heelIdx])) {
+          const ankle = asArray(landmarks[ankleIdx]);
+          const heel  = asArray(landmarks[heelIdx]);
+          // Left leg sits on the right side of the image (large x).
+          //   Pronation = heel rolls inward = heel.x decreases = ankle.x > heel.x > 0.
+          // Right leg sits on the left side (small x).
+          //   Pronation = heel rolls inward = heel.x increases = heel.x > ankle.x > 0.
+          const deviation = side === 'left'
+            ? (ankle[0] - heel[0]) / hipWidthFoot
+            : (heel[0] - ankle[0]) / hipWidthFoot;
+          if (side === 'left') angles.leftFootPronation  = deviation;
+          else                 angles.rightFootPronation = deviation;
+        }
+      }
+    }
+  }
+
   // --- Tibial angle (tibia from vertical) ---
   // Measures forward inclination of the shin — proxy for ankle dorsiflexion from lateral view.
   if (allVisible(landmarks, [LM.LEFT_KNEE, LM.LEFT_ANKLE])) {
@@ -342,6 +379,53 @@ export function computeJointAngles(landmarks) {
       asArray(landmarks[LM.RIGHT_KNEE]),
     );
     angles.tibialAngleRight = verticalAngle(tibiaRight);
+  }
+
+  // --- Hip lateral shift over base of support ---
+  // Horizontal offset of hip midpoint relative to ankle midpoint, normalised by hip width.
+  // Positive = hips shifted right; negative = shifted left.
+  // Distinct from lateralTrunkShift (shoulder–hip) and pelvicTiltDegrees (rotation).
+  if (
+    bilateralVisible(landmarks, LM.LEFT_HIP,   LM.RIGHT_HIP) &&
+    bilateralVisible(landmarks, LM.LEFT_ANKLE, LM.RIGHT_ANKLE)
+  ) {
+    const lHip = asArray(landmarks[LM.LEFT_HIP]);
+    const rHip = asArray(landmarks[LM.RIGHT_HIP]);
+    const lAnk = asArray(landmarks[LM.LEFT_ANKLE]);
+    const rAnk = asArray(landmarks[LM.RIGHT_ANKLE]);
+    const hw   = Math.abs(lHip[0] - rHip[0]);
+    if (hw > 0.01) {
+      const mHip   = midpoint(lHip, rHip);
+      const mAnkle = midpoint(lAnk, rAnk);
+      angles.hipLateralShift = (mHip[0] - mAnkle[0]) / hw;
+    }
+  }
+
+  // --- Shoulder tilt (shoulder line from horizontal, anterior view) ---
+  // Angle of the shoulder girdle from horizontal — distinct from lateral trunk flexion.
+  // Positive = right shoulder lower; negative = left shoulder lower.
+  if (bilateralVisible(landmarks, LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER)) {
+    const lSh  = asArray(landmarks[LM.LEFT_SHOULDER]);
+    const rSh  = asArray(landmarks[LM.RIGHT_SHOULDER]);
+    const horiz = Math.abs(rSh[0] - lSh[0]);
+    if (horiz > 0.01) {
+      const vert = rSh[1] - lSh[1]; // positive = right shoulder lower (y down)
+      angles.shoulderTiltDegrees = (Math.atan2(vert, horiz) * 180) / Math.PI;
+    }
+  }
+
+  // --- Heel rise (heel elevation relative to ankle, normalised by tibia length, lateral view) ---
+  // Positive = heel below ankle (normal); near-zero or negative = heel rising off the floor.
+  for (const { heelRiseKey, kneeIdx, ankleIdx, heelIdx } of [
+    { heelRiseKey: 'heelRiseLeft',  kneeIdx: LM.LEFT_KNEE,  ankleIdx: LM.LEFT_ANKLE,  heelIdx: LM.LEFT_HEEL  },
+    { heelRiseKey: 'heelRiseRight', kneeIdx: LM.RIGHT_KNEE, ankleIdx: LM.RIGHT_ANKLE, heelIdx: LM.RIGHT_HEEL },
+  ]) {
+    if (allVisible(landmarks, [kneeIdx, ankleIdx, heelIdx])) {
+      const tibiaLen = landmarks[ankleIdx].y - landmarks[kneeIdx].y; // positive (ankle is below knee in image)
+      if (tibiaLen > 0.01) {
+        angles[heelRiseKey] = (landmarks[heelIdx].y - landmarks[ankleIdx].y) / tibiaLen;
+      }
+    }
   }
 
   // --- Pelvic tilt (hip line from horizontal, anterior view) ---

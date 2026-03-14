@@ -117,24 +117,13 @@ export function detectCompensations(
   const t = thresholds ?? getThresholds();
   const findings = [];
 
-  const isFrontal = cameraAngle === 'anterior' || cameraAngle === 'posterior';
+  const isFrontal = cameraAngle === 'anterior';
   const isLateral = cameraAngle === 'lateral';
 
   // =========================================================
   // FRONTAL-PLANE CHECKS  (anterior / posterior camera only)
   // =========================================================
   if (isFrontal) {
-
-    // Posterior view: person faces away so the image is NOT mirrored left-right.
-    // The valgus deviation was computed assuming anterior (person faces camera),
-    // so the sign is inverted for posterior — negate to restore correct polarity.
-    if (cameraAngle === 'posterior') {
-      angles = {
-        ...angles,
-        leftKneeFrontalAngle:  angles.leftKneeFrontalAngle  != null ? -angles.leftKneeFrontalAngle  : null,
-        rightKneeFrontalAngle: angles.rightKneeFrontalAngle != null ? -angles.rightKneeFrontalAngle : null,
-      };
-    }
 
     // 1. Knee valgus (frontal plane collapse)
     //    Positive deviation = knee medial to hip-ankle line = valgus.
@@ -162,29 +151,55 @@ export function detectCompensations(
       }
     }
 
-    // 2. Lateral trunk shift
-    //    Only valid from frontal view. Higher abs shift = worse.
-    if (angles.lateralTrunkShift != null) {
-      const shift = Math.abs(angles.lateralTrunkShift);
+    // 2. Lateral trunk flexion (frontal-plane spine angle from vertical, in degrees)
+    //    More robust than raw shift — normalises by trunk height so it is stable
+    //    across camera distances. Higher = worse.
+    if (angles.lateralFlexionDegrees != null) {
       const sev = gradeFromThresholds(
-        shift,
-        t.lateral_shift_b, t.lateral_shift_c, t.lateral_shift_d,
-        t.lateral_shift_e, t.lateral_shift_f,
+        angles.lateralFlexionDegrees,
+        t.lateral_flexion_b, t.lateral_flexion_c, t.lateral_flexion_d,
+        t.lateral_flexion_e, t.lateral_flexion_f,
         false,
       );
       if (sev !== 'A') {
-        const direction = angles.lateralTrunkShift > 0 ? 'right' : 'left';
+        const direction = angles.lateralTrunkShift != null
+          ? (angles.lateralTrunkShift > 0 ? 'right' : 'left')
+          : '';
         findings.push({
-          name: `Lateral Trunk Shift (${direction})`,
+          name: `Lateral Trunk Flexion${direction ? ` (${direction})` : ''}`,
           severity: sev,
-          description: `shoulders shifted laterally toward the ${direction} relative to hips`,
-          metricValue: Math.round(shift * 1000) / 1000,
-          metricLabel: 'shift (normalized)',
+          description: `trunk angled laterally${direction ? ` toward the ${direction}` : ''} — shoulder midpoint displaced from hip midpoint in the frontal plane`,
+          metricValue: Math.round(angles.lateralFlexionDegrees * 10) / 10,
+          metricLabel: 'lateral flexion (deg)',
         });
       }
     }
 
-    // 3. Pelvic tilt (hip line from horizontal)
+    // 3. Knee varus (lateral bow — negative side of the frontal angle, stored as proxy)
+    for (const [side, varusProx] of [
+      ['Left',  angles.leftKneeVarusProx],
+      ['Right', angles.rightKneeVarusProx],
+    ]) {
+      if (varusProx != null) {
+        const sev = gradeFromThresholds(
+          varusProx,
+          t.knee_varus_b, t.knee_varus_c, t.knee_varus_d,
+          t.knee_varus_e, t.knee_varus_f,
+          false,
+        );
+        if (sev !== 'A') {
+          findings.push({
+            name: `${side} Knee Varus`,
+            severity: sev,
+            description: `${side.toLowerCase()} knee bowing outward from the hip-ankle alignment line`,
+            metricValue: Math.round(varusProx * 1000) / 1000,
+            metricLabel: 'knee lateral deviation (normalized)',
+          });
+        }
+      }
+    }
+
+    // 4. Pelvic tilt (hip line from horizontal)
     //    Signed: positive = right hip drops lower; higher abs = worse.
     if (angles.pelvicTiltDegrees != null) {
       const tilt = Math.abs(angles.pelvicTiltDegrees);
@@ -208,7 +223,110 @@ export function detectCompensations(
       }
     }
 
-    // 4. Bilateral symmetry (L vs R) — only valid from a frontal camera
+    // 5. Foot pronation (heel medial deviation — arch collapse / eversion)
+    for (const [side, pronation] of [
+      ['Left',  angles.leftFootPronation],
+      ['Right', angles.rightFootPronation],
+    ]) {
+      if (pronation != null) {
+        const sev = gradeFromThresholds(
+          pronation,
+          t.foot_pronation_b, t.foot_pronation_c, t.foot_pronation_d,
+          t.foot_pronation_e, t.foot_pronation_f,
+          false,
+        );
+        if (sev !== 'A') {
+          findings.push({
+            name: `${side} Foot Pronation`,
+            severity: sev,
+            description:
+              `${side.toLowerCase()} heel rolling inward relative to the ankle — ` +
+              'may indicate arch collapse, tibial internal rotation, or limited hip external rotation',
+            metricValue: Math.round(pronation * 1000) / 1000,
+            metricLabel: 'heel medial deviation (normalized)',
+          });
+        }
+      }
+    }
+
+    // 6. Foot supination (heel lateral deviation — inversion / lateral weight shift)
+    for (const [side, supination] of [
+      ['Left',  angles.leftFootSupination],
+      ['Right', angles.rightFootSupination],
+    ]) {
+      if (supination != null) {
+        const sev = gradeFromThresholds(
+          supination,
+          t.foot_supination_b, t.foot_supination_c, t.foot_supination_d,
+          t.foot_supination_e, t.foot_supination_f,
+          false,
+        );
+        if (sev !== 'A') {
+          findings.push({
+            name: `${side} Foot Supination`,
+            severity: sev,
+            description:
+              `${side.toLowerCase()} heel deviating outward relative to the ankle — ` +
+              'weight bearing on the lateral edge; may indicate tibial external rotation or hip abductor tightness',
+            metricValue: Math.round(supination * 1000) / 1000,
+            metricLabel: 'heel lateral deviation (normalized)',
+          });
+        }
+      }
+    }
+
+    // 7. Hip lateral shift over base of support
+    //    Pelvis translating sideways relative to ankles — distinct from pelvic tilt
+    //    (rotation) and lateral trunk flexion (spine angle).
+    if (angles.hipLateralShift != null) {
+      const shift = Math.abs(angles.hipLateralShift);
+      const sev = gradeFromThresholds(
+        shift,
+        t.hip_shift_b, t.hip_shift_c, t.hip_shift_d,
+        t.hip_shift_e, t.hip_shift_f,
+        false,
+      );
+      if (sev !== 'A') {
+        const direction = angles.hipLateralShift > 0 ? 'right' : 'left';
+        findings.push({
+          name: `Hip Lateral Shift (${direction})`,
+          severity: sev,
+          description:
+            `pelvis shifted laterally toward the ${direction} over the base of support — ` +
+            'may indicate unilateral loading, hip abductor weakness, or Trendelenburg pattern',
+          metricValue: Math.round(shift * 1000) / 1000,
+          metricLabel: 'hip shift (normalized)',
+        });
+      }
+    }
+
+    // 8. Shoulder tilt
+    //    Shoulder girdle tilted from horizontal — distinct from lateral trunk flexion.
+    //    Can occur when lower-trunk bending is compensated above, or indicates
+    //    structural asymmetry / thoracic rotation.
+    if (angles.shoulderTiltDegrees != null) {
+      const tilt = Math.abs(angles.shoulderTiltDegrees);
+      const sev = gradeFromThresholds(
+        tilt,
+        t.shoulder_tilt_b, t.shoulder_tilt_c, t.shoulder_tilt_d,
+        t.shoulder_tilt_e, t.shoulder_tilt_f,
+        false,
+      );
+      if (sev !== 'A') {
+        const dropSide = angles.shoulderTiltDegrees > 0 ? 'right' : 'left';
+        findings.push({
+          name: `Shoulder Tilt (${dropSide} drop)`,
+          severity: sev,
+          description:
+            `${dropSide.charAt(0).toUpperCase() + dropSide.slice(1)} shoulder sitting lower than the opposite side — ` +
+            'may indicate lateral trunk compensation, thoracic asymmetry, or structural scoliosis',
+          metricValue: Math.round(tilt * 10) / 10,
+          metricLabel: 'shoulder tilt (deg)',
+        });
+      }
+    }
+
+    // 9. Bilateral symmetry (L vs R) — only valid from a frontal camera
     // Hip flexion: skip for squat — 2D frontal projection of shoulder-hip-knee
     // is too noisy to reliably detect left-vs-right depth asymmetry.
     // Useful for lunge where one side is loaded significantly more.
@@ -227,11 +345,11 @@ export function detectCompensations(
   if (isLateral) {
 
     // When a lateralSide is specified, null out the far side's per-leg data so
-    // only the near (visible) leg contributes to tibial angle and DF checks.
+    // only the near (visible) leg contributes to tibial angle, DF, and heel-rise checks.
     if (lateralSide === 'left') {
-      angles = { ...angles, tibialAngleRight: null, rightAnkleDorsiflexion: null };
+      angles = { ...angles, tibialAngleRight: null, rightAnkleDorsiflexion: null, heelRiseRight: null };
     } else if (lateralSide === 'right') {
-      angles = { ...angles, tibialAngleLeft: null, leftAnkleDorsiflexion: null };
+      angles = { ...angles, tibialAngleLeft: null, leftAnkleDorsiflexion: null, heelRiseLeft: null };
     }
 
     // 6. Excessive forward trunk lean
@@ -374,6 +492,35 @@ export function detectCompensations(
     // 12. Tibial bilateral asymmetry (lateral) — skip when a single side is selected
     if (!lateralSide) {
       checkBilateralAsymmetry(findings, t, 'Tibial Inclination', angles.tibialAngleLeft, angles.tibialAngleRight);
+    }
+
+    // 13. Heel rise (lateral squat)
+    //     Measures vertical heel elevation relative to the ankle, normalised by tibia length.
+    //     Positive = heel well below ankle (normal); near-zero or negative = heel rising off the floor.
+    //     Lower is worse.
+    for (const [side, heelRise] of [
+      ['Left',  angles.heelRiseLeft],
+      ['Right', angles.heelRiseRight],
+    ]) {
+      if (heelRise != null) {
+        const sev = gradeFromThresholds(
+          heelRise,
+          t.heel_rise_b, t.heel_rise_c, t.heel_rise_d,
+          t.heel_rise_e, t.heel_rise_f,
+          true,
+        );
+        if (sev !== 'A') {
+          findings.push({
+            name: `${side} Heel Rise`,
+            severity: sev,
+            description:
+              `${side.toLowerCase()} heel elevating off the floor during the squat — ` +
+              'suggests limited ankle dorsiflexion, tight calf complex, or weight shifting onto the forefoot',
+            metricValue: Math.round(heelRise * 1000) / 1000,
+            metricLabel: 'heel-ankle offset (tibia-normalised)',
+          });
+        }
+      }
     }
   }
 

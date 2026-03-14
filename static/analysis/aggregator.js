@@ -33,6 +33,12 @@ const TRACKED_FIELDS = [
   { key: 'leftKneeFrontalAngle',   field: 'left_knee_frontal_angle',  name: 'Left Knee Frontal Angle' },
   { key: 'rightKneeFrontalAngle',  field: 'right_knee_frontal_angle', name: 'Right Knee Frontal Angle' },
   { key: 'lateralTrunkShift',      field: 'lateral_trunk_shift',      name: 'Lateral Trunk Shift' },
+  { key: 'leftFootPronation',      field: 'left_foot_pronation',      name: 'Left Foot Pronation' },
+  { key: 'rightFootPronation',     field: 'right_foot_pronation',     name: 'Right Foot Pronation' },
+  { key: 'hipLateralShift',        field: 'hip_lateral_shift',        name: 'Hip Lateral Shift' },
+  { key: 'shoulderTiltDegrees',    field: 'shoulder_tilt_degrees',    name: 'Shoulder Tilt' },
+  { key: 'heelRiseLeft',           field: 'heel_rise_left',           name: 'Heel Rise Left' },
+  { key: 'heelRiseRight',          field: 'heel_rise_right',          name: 'Heel Rise Right' },
 ];
 
 // Fields where LOWER is worse — use 25th percentile
@@ -42,6 +48,7 @@ const MIN_IS_WORSE = new Set([
   'leftAnkleDorsiflexion', 'rightAnkleDorsiflexion',
   'tibialAngleLeft', 'tibialAngleRight',
   'spineSegmentalAngle',
+  'heelRiseLeft', 'heelRiseRight',
 ]);
 
 // Fields where HIGHER is worse — use 75th percentile
@@ -50,6 +57,7 @@ const MAX_IS_WORSE = new Set([
   'lateralFlexionDegrees',
   'upperTrunkAngle',
   'leftKneeFrontalAngle', 'rightKneeFrontalAngle',
+  'leftFootPronation',    'rightFootPronation',
 ]);
 
 // Fields handled with signed-abs 75th-percentile strategy
@@ -57,6 +65,8 @@ const SIGNED_ABS_75TH = new Set([
   'lateralTrunkShift',
   'pelvicTiltDegrees',
   'headForwardOffset',
+  'hipLateralShift',
+  'shoulderTiltDegrees',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -243,6 +253,33 @@ export function createAggregator(screenName) {
       if (headOffsets.length > 0) {
         const idx = Math.min(headOffsets.length - 1, Math.floor(headOffsets.length * 0.75));
         worst.headForwardOffset = headOffsets[idx];
+      }
+    }
+
+    // Knee varus proxies: 25th percentile of frontal angle (most negative = worst varus),
+    // negated so positive = varus magnitude for grading. Uses same deep-frame subset as valgus.
+    for (const [varusKey, frontalKey] of [
+      ['leftKneeVarusProx',  'leftKneeFrontalAngle'],
+      ['rightKneeVarusProx', 'rightKneeFrontalAngle'],
+    ]) {
+      const src = depthFrames.length > 0 ? depthFrames : frames;
+      const vals = src.map(f => f[frontalKey]).filter(v => v != null).sort((a, b) => a - b);
+      if (vals.length > 0) {
+        const idx = Math.max(0, Math.floor(vals.length * 0.25));
+        worst[varusKey] = -vals[idx]; // negate: positive = varus magnitude
+      }
+    }
+
+    // Foot supination proxies: 25th percentile of pronation values (most negative = worst
+    // supination), negated so positive = supination magnitude for grading.
+    for (const [supinKey, pronKey] of [
+      ['leftFootSupination',  'leftFootPronation'],
+      ['rightFootSupination', 'rightFootPronation'],
+    ]) {
+      const vals = frames.map(f => f[pronKey]).filter(v => v != null).sort((a, b) => a - b);
+      if (vals.length > 0) {
+        const idx = Math.max(0, Math.floor(vals.length * 0.25));
+        worst[supinKey] = -vals[idx];
       }
     }
 

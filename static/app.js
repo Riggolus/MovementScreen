@@ -78,10 +78,9 @@ let secondsElapsed = 0;
 let is3D           = false;
 let phase3DIndex   = 0;
 const PHASES_3D    = [
-  { angle: 'anterior',  lateralSide: null,    label: 'Anterior',     turnMsg: 'Now turn 90° — right side toward camera' },
-  { angle: 'lateral',   lateralSide: 'right', label: 'Lateral (R)',  turnMsg: 'Now turn to face away from the camera' },
-  { angle: 'posterior', lateralSide: null,    label: 'Posterior',    turnMsg: 'Now turn 90° — left side toward camera' },
-  { angle: 'lateral',   lateralSide: 'left',  label: 'Lateral (L)',  turnMsg: null },
+  { angle: 'anterior',  lateralSide: null,    label: 'Anterior',    turnMsg: 'Now turn 90° — right side toward camera' },
+  { angle: 'lateral',   lateralSide: 'right', label: 'Lateral (R)', turnMsg: 'Now turn 90° — left side toward camera' },
+  { angle: 'lateral',   lateralSide: 'left',  label: 'Lateral (L)', turnMsg: null },
 ];
 let aggregators3D  = []; // { aggregator, phase } for completed phases
 let phase3DFrames  = 0;
@@ -733,7 +732,7 @@ async function analyseLocally() {
     result.recorded_at = record.recorded_at;
     result.saved = true;
 
-    renderResults(result);
+    renderResults(applyDisabledFindings(result));
     showView('results');
 
   } catch (err) {
@@ -756,7 +755,7 @@ const SEV_EMOJI  = {
   A: 'A', B: 'B', C: 'C', D: 'D', E: 'E', F: 'F',
   none: 'A', mild: 'C', moderate: 'D', severe: 'F',
 };
-const ANGLE_LABEL = { anterior: 'Anterior', lateral: 'Lateral', posterior: 'Posterior', '3d': 'Full 3D' };
+const ANGLE_LABEL = { anterior: 'Anterior', lateral: 'Lateral', '3d': 'Multi-View' };
 
 function renderResults(data) {
   const sev = data.worst_severity, color = SEV_COLOR[sev];
@@ -1149,11 +1148,12 @@ async function toggleAssessmentDetail(id) {
       body.innerHTML = `<p style="padding:16px;color:var(--text-3);font-size:13px">Assessment not found.</p>`;
       return;
     }
+    const displayData = applyDisabledFindings(data);
     let inner = '';
-    if (data.findings.length === 0) {
+    if (displayData.findings.length === 0) {
       inner = `<div class="no-findings" style="margin-top:10px"><span class="no-findings-icon" style="font-size:24px">✓</span><p>No compensations detected.</p></div>`;
     } else {
-      for (const f of data.findings) {
+      for (const f of displayData.findings) {
         const c = SEV_COLOR[f.severity];
         inner += `
           <div class="finding-card" style="--border-color:${c}">
@@ -2021,6 +2021,60 @@ function getProfile() {
 }
 function saveProfile(data) { localStorage.setItem(PROFILE_KEY, JSON.stringify(data)); }
 
+// ── Disabled findings ─────────────────────────────────────
+const DISABLED_FINDINGS_KEY = 'ms_disabled_findings';
+
+/**
+ * All detectable compensation categories.
+ * `match` is compared via String.includes() against finding.name.
+ */
+const FINDING_CATEGORIES = [
+  // Frontal plane
+  { key: 'knee_valgus',     label: 'Knee Valgus',               desc: 'Knee collapsing inward toward the midline',         match: 'Knee Valgus',               group: 'Frontal Plane' },
+  { key: 'knee_varus',      label: 'Knee Varus',                desc: 'Knee bowing outward from the midline',              match: 'Knee Varus',                group: 'Frontal Plane' },
+  { key: 'pelvic_tilt',     label: 'Pelvic Tilt',               desc: 'Hip dropping lower on one side',                    match: 'Pelvic Tilt',               group: 'Frontal Plane' },
+  { key: 'lateral_flexion', label: 'Lateral Trunk Flexion',     desc: 'Trunk angling sideways in the frontal plane',       match: 'Lateral Trunk Flexion',     group: 'Frontal Plane' },
+  { key: 'hip_shift',       label: 'Hip Lateral Shift',         desc: 'Pelvis translating sideways over the base of support', match: 'Hip Lateral Shift',      group: 'Frontal Plane' },
+  { key: 'shoulder_tilt',   label: 'Shoulder Tilt',             desc: 'Shoulder girdle tilting from horizontal',           match: 'Shoulder Tilt',             group: 'Frontal Plane' },
+  { key: 'foot_pronation',  label: 'Foot Pronation',            desc: 'Arch collapse / heel rolling inward',               match: 'Foot Pronation',            group: 'Frontal Plane' },
+  { key: 'foot_supination', label: 'Foot Supination',           desc: 'Lateral heel loading / foot inverting outward',     match: 'Foot Supination',           group: 'Frontal Plane' },
+  // Sagittal plane
+  { key: 'trunk_lean',      label: 'Forward Trunk Lean',        desc: 'Excessive forward lean of the trunk from vertical', match: 'Forward Trunk Lean',        group: 'Sagittal Plane' },
+  { key: 'dorsiflexion',    label: 'Restricted Dorsiflexion',   desc: 'Limited ankle mobility / tibial forward lean',      match: 'Restricted Dorsiflexion',   group: 'Sagittal Plane' },
+  { key: 'heel_rise',       label: 'Heel Rise',                 desc: 'Heels lifting off the floor during the squat',      match: 'Heel Rise',                 group: 'Sagittal Plane' },
+  { key: 'head_posture',    label: 'Head Forward Posture',      desc: 'Ear positioned significantly ahead of the shoulder', match: 'Head Forward Posture',     group: 'Sagittal Plane' },
+  { key: 'upper_trunk',     label: 'Upper Trunk Flexion',       desc: 'Thoracic kyphosis / cervical hyperlordosis',        match: 'Upper Trunk Flexion',       group: 'Sagittal Plane' },
+  { key: 'spine_curve',     label: 'Spinal Segmental Curvature', desc: 'Segmental bend through the spine',                 match: 'Spinal Segmental Curvature', group: 'Sagittal Plane' },
+  // Other
+  { key: 'bilateral_asym',  label: 'Bilateral Asymmetry',       desc: 'Significant left vs right side difference',         match: 'Bilateral',                 group: 'Other' },
+  { key: 'squat_depth',     label: 'Squat Depth Warning',       desc: 'Insufficient or reduced squat depth',               match: 'Squat Depth',               group: 'Other' },
+  { key: 'gait',            label: 'Gait Findings',             desc: 'All gait-specific compensations',                   match: 'Gait',                      group: 'Other' },
+];
+
+function getDisabledFindings() {
+  try { return new Set(JSON.parse(localStorage.getItem(DISABLED_FINDINGS_KEY) || '[]')); }
+  catch { return new Set(); }
+}
+function saveDisabledFindings(disabledSet) {
+  localStorage.setItem(DISABLED_FINDINGS_KEY, JSON.stringify([...disabledSet]));
+}
+
+/** Filter a result object's findings by the current disabled set, recomputing worstSeverity. */
+function applyDisabledFindings(result) {
+  const disabled = getDisabledFindings();
+  if (disabled.size === 0) return result;
+  const filtered = result.findings.filter(f =>
+    !FINDING_CATEGORIES.some(cat => disabled.has(cat.key) && f.name.includes(cat.match))
+  );
+  if (filtered.length === result.findings.length) return result;
+  const GRADE_ORD = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5 };
+  let worstSeverity = 'A';
+  for (const f of filtered) {
+    if (GRADE_ORD[f.severity] > GRADE_ORD[worstSeverity]) worstSeverity = f.severity;
+  }
+  return { ...result, findings: filtered, worst_severity: worstSeverity, has_findings: filtered.length > 0 };
+}
+
 // ── Onboarding ────────────────────────────────────────────
 const TUTORIAL_SLIDES = [
   {
@@ -2285,80 +2339,128 @@ function showTutorialOnly(onDone) {
 }
 
 // ── Settings ──────────────────────────────────────────────
-function loadSettings() {
+function loadSettings(activeTab = 'profile') {
   const p = getProfile();
   let unit = 'cm';
   let selectedSex = p.sex || '';
   let selectedAge = p.ageRange || '';
+  const disabled = getDisabledFindings();
+
+  // Build findings tab HTML grouped by category
+  const groups = [...new Set(FINDING_CATEGORIES.map(c => c.group))];
+  const findingsHtml = groups.map(group => {
+    const cats = FINDING_CATEGORIES.filter(c => c.group === group);
+    const rows = cats.map(cat => {
+      const isEnabled = !disabled.has(cat.key);
+      return `
+        <div class="finding-toggle-row">
+          <div class="finding-toggle-info">
+            <div class="finding-toggle-label${isEnabled ? '' : ' disabled'}" id="ftl-${cat.key}">${cat.label}</div>
+            <div class="finding-toggle-desc">${cat.desc}</div>
+          </div>
+          <label class="sw-toggle">
+            <input type="checkbox" data-finding-key="${cat.key}" ${isEnabled ? 'checked' : ''} />
+            <span class="sw-slider"></span>
+          </label>
+        </div>`;
+    }).join('');
+    return `<p class="finding-group-label">${group}</p>${rows}`;
+  }).join('');
 
   views.settings.innerHTML = `
     <div class="settings-wrap">
       <h2 class="settings-title">Settings</h2>
 
-      <div class="settings-section">
-        <p class="settings-section-title">Profile</p>
-        <div class="ob-form">
-          <div class="ob-field">
-            <label for="s-name">Name</label>
-            <input type="text" id="s-name" value="${p.name || ''}" placeholder="Your name" autocomplete="given-name" />
+      <div class="settings-tabs">
+        <button class="stab-btn${activeTab === 'profile' ? ' active' : ''}" data-tab="profile">Profile</button>
+        <button class="stab-btn${activeTab === 'findings' ? ' active' : ''}" data-tab="findings">Findings</button>
+        <button class="stab-btn${activeTab === 'advanced' ? ' active' : ''}" data-tab="advanced">Advanced</button>
+      </div>
+
+      <!-- Profile tab -->
+      <div class="stab-panel${activeTab === 'profile' ? ' active' : ''}" id="stab-profile">
+        <div class="settings-section">
+          <p class="settings-section-title">Your Profile</p>
+          <div class="ob-form">
+            <div class="ob-field">
+              <label for="s-name">Name</label>
+              <input type="text" id="s-name" value="${p.name || ''}" placeholder="Your name" autocomplete="given-name" />
+            </div>
+            <div class="ob-field">
+              <label>Height</label>
+              <div class="ob-unit-toggle" id="s-unit-toggle">
+                <button class="ob-unit-btn active" data-unit="cm">cm</button>
+                <button class="ob-unit-btn" data-unit="ft">ft / in</button>
+              </div>
+              <div id="s-height-cm-wrap" class="ob-height-wrap">
+                <input type="number" id="s-height-cm" placeholder="175" min="100" max="250" value="${p.heightCm ? Math.round(p.heightCm) : ''}" inputmode="numeric" />
+                <span class="ob-unit-label">cm</span>
+              </div>
+              <div id="s-height-ft-wrap" class="ob-height-wrap hidden">
+                <input type="number" id="s-height-ft" placeholder="5" min="3" max="8" inputmode="numeric" />
+                <span class="ob-unit-label">ft</span>
+                <input type="number" id="s-height-in" placeholder="9" min="0" max="11" inputmode="numeric" />
+                <span class="ob-unit-label">in</span>
+              </div>
+            </div>
+            <div class="ob-field">
+              <label>Biological sex <span class="ob-opt">(optional)</span></label>
+              <div class="ob-chip-row" id="s-sex-chips">
+                <button class="ob-chip${selectedSex === 'male' ? ' active' : ''}" data-val="male">Male</button>
+                <button class="ob-chip${selectedSex === 'female' ? ' active' : ''}" data-val="female">Female</button>
+                <button class="ob-chip${!selectedSex ? ' active' : ''}" data-val="">Prefer not to say</button>
+              </div>
+            </div>
+            <div class="ob-field">
+              <label>Age range <span class="ob-opt">(optional)</span></label>
+              <div class="ob-chip-row" id="s-age-chips">
+                ${['Under 18','18–29','30–39','40–49','50–59','60+'].map(a =>
+                  `<button class="ob-chip${selectedAge === a ? ' active' : ''}" data-val="${a}">${a}</button>`
+                ).join('')}
+              </div>
+            </div>
+            <button class="btn-primary" id="s-save-profile">Save Profile</button>
           </div>
-          <div class="ob-field">
-            <label>Height</label>
-            <div class="ob-unit-toggle" id="s-unit-toggle">
-              <button class="ob-unit-btn active" data-unit="cm">cm</button>
-              <button class="ob-unit-btn" data-unit="ft">ft / in</button>
-            </div>
-            <div id="s-height-cm-wrap" class="ob-height-wrap">
-              <input type="number" id="s-height-cm" placeholder="175" min="100" max="250" value="${p.heightCm ? Math.round(p.heightCm) : ''}" inputmode="numeric" />
-              <span class="ob-unit-label">cm</span>
-            </div>
-            <div id="s-height-ft-wrap" class="ob-height-wrap hidden">
-              <input type="number" id="s-height-ft" placeholder="5" min="3" max="8" inputmode="numeric" />
-              <span class="ob-unit-label">ft</span>
-              <input type="number" id="s-height-in" placeholder="9" min="0" max="11" inputmode="numeric" />
-              <span class="ob-unit-label">in</span>
-            </div>
-          </div>
-          <div class="ob-field">
-            <label>Biological sex <span class="ob-opt">(optional)</span></label>
-            <div class="ob-chip-row" id="s-sex-chips">
-              <button class="ob-chip${selectedSex === 'male' ? ' active' : ''}" data-val="male">Male</button>
-              <button class="ob-chip${selectedSex === 'female' ? ' active' : ''}" data-val="female">Female</button>
-              <button class="ob-chip${!selectedSex ? ' active' : ''}" data-val="">Prefer not to say</button>
-            </div>
-          </div>
-          <div class="ob-field">
-            <label>Age range <span class="ob-opt">(optional)</span></label>
-            <div class="ob-chip-row" id="s-age-chips">
-              ${['Under 18','18–29','30–39','40–49','50–59','60+'].map(a =>
-                `<button class="ob-chip${selectedAge === a ? ' active' : ''}" data-val="${a}">${a}</button>`
-              ).join('')}
-            </div>
-          </div>
-          <button class="btn-primary" id="s-save-profile">Save Profile</button>
         </div>
       </div>
 
-      <div class="settings-section">
-        <p class="settings-section-title">Tutorial</p>
-        <p class="settings-section-desc">Watch the getting started walkthrough again.</p>
-        <button class="btn-ghost" id="s-replay-tutorial">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Replay Tutorial
-        </button>
+      <!-- Findings tab -->
+      <div class="stab-panel${activeTab === 'findings' ? ' active' : ''}" id="stab-findings">
+        <div class="settings-section">
+          <p class="settings-section-title">Compensation Findings</p>
+          <p class="settings-section-desc">Toggle which compensation types are reported. Disabled findings are still detected but hidden from results.</p>
+          ${findingsHtml}
+        </div>
       </div>
 
-      <div class="settings-section">
-        <p class="settings-section-title">Threshold Calibration</p>
-        <p class="settings-section-desc">Customise the sensitivity of compensation detection.</p>
-        <button class="btn-ghost" id="s-open-thresholds">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
-          Open Thresholds
-        </button>
+      <!-- Advanced tab -->
+      <div class="stab-panel${activeTab === 'advanced' ? ' active' : ''}" id="stab-advanced">
+        <div class="settings-section">
+          <p class="settings-section-title">Tutorial</p>
+          <p class="settings-section-desc">Watch the getting started walkthrough again.</p>
+          <button class="btn-ghost" id="s-replay-tutorial">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Replay Tutorial
+          </button>
+        </div>
+        <div class="settings-section">
+          <p class="settings-section-title">Threshold Calibration</p>
+          <p class="settings-section-desc">Customise the sensitivity of compensation detection.</p>
+          <button class="btn-ghost" id="s-open-thresholds">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+            Open Thresholds
+          </button>
+        </div>
       </div>
     </div>
   `;
 
+  // Tab switching
+  views.settings.querySelectorAll('.stab-btn').forEach(btn => {
+    btn.addEventListener('click', () => loadSettings(btn.dataset.tab));
+  });
+
+  // Profile tab interactions
   views.settings.querySelectorAll('#s-unit-toggle .ob-unit-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       views.settings.querySelectorAll('#s-unit-toggle .ob-unit-btn').forEach(b => b.classList.remove('active'));
@@ -2380,26 +2482,45 @@ function loadSettings() {
       btn.classList.add('active'); selectedAge = btn.dataset.val;
     });
   });
+  const saveProfileBtn = document.getElementById('s-save-profile');
+  if (saveProfileBtn) {
+    saveProfileBtn.addEventListener('click', () => {
+      const name = document.getElementById('s-name').value.trim();
+      let heightCm = p.heightCm || null;
+      if (unit === 'cm') {
+        const v = parseFloat(document.getElementById('s-height-cm').value);
+        if (!isNaN(v) && v > 0) heightCm = v;
+      } else {
+        const ft = parseFloat(document.getElementById('s-height-ft').value) || 0;
+        const ins = parseFloat(document.getElementById('s-height-in').value) || 0;
+        if (ft > 0) heightCm = Math.round((ft * 12 + ins) * 2.54);
+      }
+      saveProfile({ name, heightCm, sex: selectedSex || null, ageRange: selectedAge || null });
+      showToast('Profile saved');
+    });
+  }
 
-  document.getElementById('s-save-profile').addEventListener('click', () => {
-    const name = document.getElementById('s-name').value.trim();
-    let heightCm = p.heightCm || null;
-    if (unit === 'cm') {
-      const v = parseFloat(document.getElementById('s-height-cm').value);
-      if (!isNaN(v) && v > 0) heightCm = v;
-    } else {
-      const ft = parseFloat(document.getElementById('s-height-ft').value) || 0;
-      const ins = parseFloat(document.getElementById('s-height-in').value) || 0;
-      if (ft > 0) heightCm = Math.round((ft * 12 + ins) * 2.54);
-    }
-    saveProfile({ name, heightCm, sex: selectedSex || null, ageRange: selectedAge || null });
-    showToast('Profile saved');
+  // Findings tab — toggle switches
+  views.settings.querySelectorAll('[data-finding-key]').forEach(checkbox => {
+    checkbox.addEventListener('change', () => {
+      const key = checkbox.dataset.findingKey;
+      const d = getDisabledFindings();
+      if (checkbox.checked) { d.delete(key); } else { d.add(key); }
+      saveDisabledFindings(d);
+      const label = document.getElementById(`ftl-${key}`);
+      if (label) label.classList.toggle('disabled', !checkbox.checked);
+    });
   });
 
-  document.getElementById('s-replay-tutorial').addEventListener('click', () => {
-    showTutorialOnly(() => { obOverlay.classList.add('hidden'); showView('settings'); });
-  });
-  document.getElementById('s-open-thresholds').addEventListener('click', loadAdminPage);
+  // Advanced tab interactions
+  const replayBtn = document.getElementById('s-replay-tutorial');
+  if (replayBtn) {
+    replayBtn.addEventListener('click', () => {
+      showTutorialOnly(() => { obOverlay.classList.add('hidden'); showView('settings'); });
+    });
+  }
+  const threshBtn = document.getElementById('s-open-thresholds');
+  if (threshBtn) threshBtn.addEventListener('click', loadAdminPage);
 
   showView('settings');
 }
