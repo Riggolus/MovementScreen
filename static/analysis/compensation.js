@@ -175,29 +175,11 @@ export function detectCompensations(
       }
     }
 
-    // 3. Knee varus (lateral bow — negative side of the frontal angle, stored as proxy)
-    for (const [side, varusProx] of [
-      ['Left',  angles.leftKneeVarusProx],
-      ['Right', angles.rightKneeVarusProx],
-    ]) {
-      if (varusProx != null) {
-        const sev = gradeFromThresholds(
-          varusProx,
-          t.knee_varus_b, t.knee_varus_c, t.knee_varus_d,
-          t.knee_varus_e, t.knee_varus_f,
-          false,
-        );
-        if (sev !== 'A') {
-          findings.push({
-            name: `${side} Knee Varus`,
-            severity: sev,
-            description: `${side.toLowerCase()} knee bowing outward from the hip-ankle alignment line`,
-            metricValue: Math.round(varusProx * 1000) / 1000,
-            metricLabel: 'knee lateral deviation (normalized)',
-          });
-        }
-      }
-    }
+    // 3. Knee varus — removed.
+    // The knee frontal angle (deviation from hip-ankle line) cannot reliably distinguish
+    // genuine varus from lateral hip shift: when the hip moves laterally the expected-X
+    // shifts inward and a neutral knee appears to sit outside the line.
+    // Varus detection requires 3D data or a dedicated lateral-view metric.
 
     // 4. Pelvic tilt (hip line from horizontal)
     //    Signed: positive = right hip drops lower; higher abs = worse.

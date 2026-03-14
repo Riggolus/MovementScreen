@@ -258,21 +258,12 @@ export function createAggregator(screenName) {
 
     // Knee varus proxies: 40th percentile of frontal angle (most negative = worst varus),
     // negated so positive = varus magnitude for grading. Uses same deep-frame subset as valgus.
-    // Guard: only compute if the MEDIAN frontal angle is below −0.02 — this requires the
-    // person's knees to be consistently and clearly bowing outward beyond the landmark noise
-    // floor (~±0.02 hip-widths). Neutral or valgus knees can produce a slightly negative
-    // median from noise; the −0.02 floor prevents those false positives.
-    for (const [varusKey, frontalKey] of [
-      ['leftKneeVarusProx',  'leftKneeFrontalAngle'],
-      ['rightKneeVarusProx', 'rightKneeFrontalAngle'],
-    ]) {
-      const src = depthFrames.length > 0 ? depthFrames : frames;
-      const vals = src.map(f => f[frontalKey]).filter(v => v != null).sort((a, b) => a - b);
-      if (vals.length > 0 && median(vals) < -0.02) {
-        const idx = Math.max(0, Math.floor(vals.length * 0.40));
-        worst[varusKey] = -vals[idx]; // negate: positive = varus magnitude
-      }
-    }
+    // Knee varus is not computed from 2D anterior view.
+    // The knee frontal angle measures deviation from the hip-to-ankle alignment line.
+    // Any lateral hip shift (a separate compensation) moves that line inward, making a
+    // neutral knee appear to sit outside it — an identical signal to genuine varus.
+    // This confound cannot be resolved without 3D data, so varus is omitted to avoid
+    // consistent false positives. Valgus (medial collapse) is distinct and unaffected.
 
     // Foot supination proxies: 25th percentile of pronation values (most negative = worst
     // supination), negated so positive = supination magnitude for grading.
