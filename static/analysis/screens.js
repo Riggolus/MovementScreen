@@ -46,11 +46,18 @@ function xy(landmarks, idx) {
 const SQUAT_DEPTH_THRESHOLD_DEGREES = 115.0;
 
 /**
- * Frontal-camera hip-to-knee normalised height ratio threshold.
- * 0.95 = hip must be within ~5% of knee height (near-parallel).
- * Was 0.85 which fired too early (above-parallel quarter squats passing as "at depth").
+ * Minimum frontal hip-to-knee ratio to consider a frame worth analysing.
+ * 0.75 = hip at least 75% of the way to knee height — captures any meaningful
+ * squat motion so compensations can be detected regardless of depth achieved.
  */
-const FRONTAL_DEPTH_HIP_FRACTION = 0.95;
+const FRONTAL_CAPTURE_FRACTION = 0.75;
+
+/**
+ * Ratio above which a frontal squat frame is considered to have reached
+ * functional depth (hip within ~10% of knee height ≈ near-parallel).
+ * Used to generate a "Reduced Depth" finding when never achieved.
+ */
+export const FRONTAL_FULL_DEPTH_FRACTION = 0.90;
 
 /** Lead-knee angle below which a lunge is considered at-depth. */
 const LUNGE_DEPTH_THRESHOLD_DEGREES = 105.0;
@@ -60,24 +67,26 @@ const LUNGE_DEPTH_THRESHOLD_DEGREES = 105.0;
 // ---------------------------------------------------------------------------
 
 /**
- * Determine whether a squat frame is at depth.
- * Port of: SquatScreen.accept_frame() in squat.py
+ * Determine whether a squat frame should be captured for analysis.
+ *
+ * Returns { accepted, depthRatio } so callers can independently track
+ * whether the person reached functional depth.
  *
  * Frontal (anterior/posterior):
- *   Uses normalised hip-to-knee vertical proximity as a depth proxy because
- *   the 2-D knee angle does not capture sagittal depth from this view.
+ *   Captures any frame where the hip is at least 75% of the way to knee
+ *   height — wide enough to catch compensations at shallow depth.
+ *   depthRatio = hipNorm / kneeNorm (1.0 = hip level with knee = full depth).
  *
  * Lateral:
- *   Uses the 2-D hip-knee-ankle angle, which correctly captures sagittal flexion.
+ *   Uses the 2-D hip-knee-ankle angle. depthRatio = 1.0 when at depth, 0 otherwise.
  *
  * @param {Array}  landmarks    - MediaPipe 33-landmark array
  * @param {string} cameraAngle  - 'anterior' | 'posterior' | 'lateral'
  * @param {string} [lateralSide='left'] - 'left' | 'right' — only used for lateral view
- * @returns {boolean}
+ * @returns {{ accepted: boolean, depthRatio: number }}
  */
 export function acceptFrameSquat(landmarks, cameraAngle, lateralSide = 'left') {
   if (cameraAngle === 'anterior' || cameraAngle === 'posterior') {
-    // Collect visible shoulder and ankle y-coordinates for body height normalisation
     const shoulderYs = [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER]
       .filter(idx => vis(landmarks, idx))
       .map(idx => landmarks[idx].y);
@@ -86,13 +95,13 @@ export function acceptFrameSquat(landmarks, cameraAngle, lateralSide = 'left') {
       .filter(idx => vis(landmarks, idx))
       .map(idx => landmarks[idx].y);
 
-    if (shoulderYs.length === 0 || ankleYs.length === 0) return false;
+    if (shoulderYs.length === 0 || ankleYs.length === 0) return { accepted: false, depthRatio: 0 };
 
-    const topY    = Math.min(...shoulderYs);
-    const bottomY = Math.max(...ankleYs);
-    const bodyH   = bottomY - topY;
-    if (bodyH < 0.01) return false;
+    const topY  = Math.min(...shoulderYs);
+    const bodyH = Math.max(...ankleYs) - topY;
+    if (bodyH < 0.01) return { accepted: false, depthRatio: 0 };
 
+    let bestRatio = 0;
     for (const [hipIdx, kneeIdx] of [
       [LM.LEFT_HIP,  LM.LEFT_KNEE],
       [LM.RIGHT_HIP, LM.RIGHT_KNEE],
@@ -100,12 +109,11 @@ export function acceptFrameSquat(landmarks, cameraAngle, lateralSide = 'left') {
       if (vis(landmarks, hipIdx) && vis(landmarks, kneeIdx)) {
         const hipNorm  = (landmarks[hipIdx].y  - topY) / bodyH;
         const kneeNorm = (landmarks[kneeIdx].y - topY) / bodyH;
-        if (kneeNorm > 0 && hipNorm >= kneeNorm * FRONTAL_DEPTH_HIP_FRACTION) {
-          return true;
-        }
+        if (kneeNorm > 0) bestRatio = Math.max(bestRatio, hipNorm / kneeNorm);
       }
     }
-    return false;
+
+    return { accepted: bestRatio >= FRONTAL_CAPTURE_FRACTION, depthRatio: bestRatio };
 
   } else {
     // Lateral camera: only check the selected side (the near/visible leg).
@@ -120,9 +128,10 @@ export function acceptFrameSquat(landmarks, cameraAngle, lateralSide = 'left') {
         xy(landmarks, kneeIdx),
         xy(landmarks, ankleIdx),
       );
-      return kneeAngle < SQUAT_DEPTH_THRESHOLD_DEGREES;
+      const accepted = kneeAngle < SQUAT_DEPTH_THRESHOLD_DEGREES;
+      return { accepted, depthRatio: accepted ? 1.0 : 0 };
     }
-    return false;
+    return { accepted: false, depthRatio: 0 };
   }
 }
 
