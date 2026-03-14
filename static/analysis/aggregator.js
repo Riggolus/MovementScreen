@@ -35,6 +35,8 @@ const TRACKED_FIELDS = [
   { key: 'lateralTrunkShift',      field: 'lateral_trunk_shift',      name: 'Lateral Trunk Shift' },
   { key: 'leftFootPronation',      field: 'left_foot_pronation',      name: 'Left Foot Pronation' },
   { key: 'rightFootPronation',     field: 'right_foot_pronation',     name: 'Right Foot Pronation' },
+  { key: 'hipLateralShift',        field: 'hip_lateral_shift',        name: 'Hip Lateral Shift' },
+  { key: 'shoulderTiltDegrees',    field: 'shoulder_tilt_degrees',    name: 'Shoulder Tilt' },
 ];
 
 // Fields where LOWER is worse — use 25th percentile
@@ -60,6 +62,8 @@ const SIGNED_ABS_75TH = new Set([
   'lateralTrunkShift',
   'pelvicTiltDegrees',
   'headForwardOffset',
+  'hipLateralShift',
+  'shoulderTiltDegrees',
 ]);
 
 // ---------------------------------------------------------------------------

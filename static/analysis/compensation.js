@@ -286,7 +286,58 @@ export function detectCompensations(
       }
     }
 
-    // 7. Bilateral symmetry (L vs R) — only valid from a frontal camera
+    // 7. Hip lateral shift over base of support
+    //    Pelvis translating sideways relative to ankles — distinct from pelvic tilt
+    //    (rotation) and lateral trunk flexion (spine angle).
+    if (angles.hipLateralShift != null) {
+      const shift = Math.abs(angles.hipLateralShift);
+      const sev = gradeFromThresholds(
+        shift,
+        t.hip_shift_b, t.hip_shift_c, t.hip_shift_d,
+        t.hip_shift_e, t.hip_shift_f,
+        false,
+      );
+      if (sev !== 'A') {
+        const direction = angles.hipLateralShift > 0 ? 'right' : 'left';
+        findings.push({
+          name: `Hip Lateral Shift (${direction})`,
+          severity: sev,
+          description:
+            `pelvis shifted laterally toward the ${direction} over the base of support — ` +
+            'may indicate unilateral loading, hip abductor weakness, or Trendelenburg pattern',
+          metricValue: Math.round(shift * 1000) / 1000,
+          metricLabel: 'hip shift (normalized)',
+        });
+      }
+    }
+
+    // 8. Shoulder tilt
+    //    Shoulder girdle tilted from horizontal — distinct from lateral trunk flexion.
+    //    Can occur when lower-trunk bending is compensated above, or indicates
+    //    structural asymmetry / thoracic rotation.
+    if (angles.shoulderTiltDegrees != null) {
+      const tilt = Math.abs(angles.shoulderTiltDegrees);
+      const sev = gradeFromThresholds(
+        tilt,
+        t.shoulder_tilt_b, t.shoulder_tilt_c, t.shoulder_tilt_d,
+        t.shoulder_tilt_e, t.shoulder_tilt_f,
+        false,
+      );
+      if (sev !== 'A') {
+        const dropSide = angles.shoulderTiltDegrees > 0 ? 'right' : 'left';
+        findings.push({
+          name: `Shoulder Tilt (${dropSide} drop)`,
+          severity: sev,
+          description:
+            `${dropSide.charAt(0).toUpperCase() + dropSide.slice(1)} shoulder sitting lower than the opposite side — ` +
+            'may indicate lateral trunk compensation, thoracic asymmetry, or structural scoliosis',
+          metricValue: Math.round(tilt * 10) / 10,
+          metricLabel: 'shoulder tilt (deg)',
+        });
+      }
+    }
+
+    // 9. Bilateral symmetry (L vs R) — only valid from a frontal camera
     // Hip flexion: skip for squat — 2D frontal projection of shoulder-hip-knee
     // is too noisy to reliably detect left-vs-right depth asymmetry.
     // Useful for lunge where one side is loaded significantly more.

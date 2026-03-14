@@ -72,6 +72,22 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
   foot_supination_e: 0.12,
   foot_supination_f: 0.18,
 
+  // Hip lateral shift over base of support — normalised by hip width (higher is worse).
+  // Positive = hips shifted right; detection uses absolute value.
+  hip_shift_b: 0.05,
+  hip_shift_c: 0.12,
+  hip_shift_d: 0.22,
+  hip_shift_e: 0.30,
+  hip_shift_f: 0.40,
+
+  // Shoulder tilt from horizontal — degrees (higher is worse).
+  // Positive = right shoulder lower; detection uses absolute value.
+  shoulder_tilt_b: 3.0,
+  shoulder_tilt_c: 5.0,
+  shoulder_tilt_d: 8.0,
+  shoulder_tilt_e: 11.0,
+  shoulder_tilt_f: 14.0,
+
   // Bilateral asymmetry ratio [0–1] (higher is worse)
   asymmetry_b: 0.05,
   asymmetry_c: 0.10,

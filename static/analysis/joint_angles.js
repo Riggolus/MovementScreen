@@ -150,6 +150,8 @@ export function computeJointAngles(landmarks) {
     headForwardOffset: null,
     leftFootPronation:  null,
     rightFootPronation: null,
+    hipLateralShift:    null,
+    shoulderTiltDegrees: null,
   };
 
   // --- Knee flexion (hip-knee-ankle) ---
@@ -375,6 +377,39 @@ export function computeJointAngles(landmarks) {
       asArray(landmarks[LM.RIGHT_KNEE]),
     );
     angles.tibialAngleRight = verticalAngle(tibiaRight);
+  }
+
+  // --- Hip lateral shift over base of support ---
+  // Horizontal offset of hip midpoint relative to ankle midpoint, normalised by hip width.
+  // Positive = hips shifted right; negative = shifted left.
+  // Distinct from lateralTrunkShift (shoulder–hip) and pelvicTiltDegrees (rotation).
+  if (
+    bilateralVisible(landmarks, LM.LEFT_HIP,   LM.RIGHT_HIP) &&
+    bilateralVisible(landmarks, LM.LEFT_ANKLE, LM.RIGHT_ANKLE)
+  ) {
+    const lHip = asArray(landmarks[LM.LEFT_HIP]);
+    const rHip = asArray(landmarks[LM.RIGHT_HIP]);
+    const lAnk = asArray(landmarks[LM.LEFT_ANKLE]);
+    const rAnk = asArray(landmarks[LM.RIGHT_ANKLE]);
+    const hw   = Math.abs(lHip[0] - rHip[0]);
+    if (hw > 0.01) {
+      const mHip   = midpoint(lHip, rHip);
+      const mAnkle = midpoint(lAnk, rAnk);
+      angles.hipLateralShift = (mHip[0] - mAnkle[0]) / hw;
+    }
+  }
+
+  // --- Shoulder tilt (shoulder line from horizontal, anterior view) ---
+  // Angle of the shoulder girdle from horizontal — distinct from lateral trunk flexion.
+  // Positive = right shoulder lower; negative = left shoulder lower.
+  if (bilateralVisible(landmarks, LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER)) {
+    const lSh  = asArray(landmarks[LM.LEFT_SHOULDER]);
+    const rSh  = asArray(landmarks[LM.RIGHT_SHOULDER]);
+    const horiz = Math.abs(rSh[0] - lSh[0]);
+    if (horiz > 0.01) {
+      const vert = rSh[1] - lSh[1]; // positive = right shoulder lower (y down)
+      angles.shoulderTiltDegrees = (Math.atan2(vert, horiz) * 180) / Math.PI;
+    }
   }
 
   // --- Pelvic tilt (hip line from horizontal, anterior view) ---
