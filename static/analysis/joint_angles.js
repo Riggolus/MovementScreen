@@ -148,6 +148,8 @@ export function computeJointAngles(landmarks) {
     upperTrunkAngle: null,
     spineSegmentalAngle: null,
     headForwardOffset: null,
+    leftFootPronation:  null,
+    rightFootPronation: null,
   };
 
   // --- Knee flexion (hip-knee-ankle) ---
@@ -322,6 +324,37 @@ export function computeJointAngles(landmarks) {
               angles.rightKneeFrontalAngle = deviation;
             }
           }
+        }
+      }
+    }
+  }
+
+  // --- Foot frontal deviation (pronation / supination proxy, anterior view) ---
+  // Measures the horizontal deviation of the heel relative to the ankle.
+  // Positive = heel medial to ankle = pronation (arch collapse / eversion).
+  // Negative = heel lateral to ankle = supination (inversion).
+  // Normalised by hip width for consistency with the knee valgus metric.
+  if (bilateralVisible(landmarks, LM.LEFT_HIP, LM.RIGHT_HIP)) {
+    const hipWidthFoot = Math.abs(
+      landmarks[LM.LEFT_HIP].x - landmarks[LM.RIGHT_HIP].x,
+    );
+    if (hipWidthFoot > 0.01) {
+      for (const { side, ankleIdx, heelIdx } of [
+        { side: 'left',  ankleIdx: LM.LEFT_ANKLE,  heelIdx: LM.LEFT_HEEL  },
+        { side: 'right', ankleIdx: LM.RIGHT_ANKLE, heelIdx: LM.RIGHT_HEEL },
+      ]) {
+        if (allVisible(landmarks, [ankleIdx, heelIdx])) {
+          const ankle = asArray(landmarks[ankleIdx]);
+          const heel  = asArray(landmarks[heelIdx]);
+          // Left leg sits on the right side of the image (large x).
+          //   Pronation = heel rolls inward = heel.x decreases = ankle.x > heel.x > 0.
+          // Right leg sits on the left side (small x).
+          //   Pronation = heel rolls inward = heel.x increases = heel.x > ankle.x > 0.
+          const deviation = side === 'left'
+            ? (ankle[0] - heel[0]) / hipWidthFoot
+            : (heel[0] - ankle[0]) / hipWidthFoot;
+          if (side === 'left') angles.leftFootPronation  = deviation;
+          else                 angles.rightFootPronation = deviation;
         }
       }
     }

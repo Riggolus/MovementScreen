@@ -186,7 +186,31 @@ export function detectCompensations(
       }
     }
 
-    // 3. Pelvic tilt (hip line from horizontal)
+    // 3. Knee varus (lateral bow — negative side of the frontal angle, stored as proxy)
+    for (const [side, varusProx] of [
+      ['Left',  angles.leftKneeVarusProx],
+      ['Right', angles.rightKneeVarusProx],
+    ]) {
+      if (varusProx != null) {
+        const sev = gradeFromThresholds(
+          varusProx,
+          t.knee_varus_b, t.knee_varus_c, t.knee_varus_d,
+          t.knee_varus_e, t.knee_varus_f,
+          false,
+        );
+        if (sev !== 'A') {
+          findings.push({
+            name: `${side} Knee Varus`,
+            severity: sev,
+            description: `${side.toLowerCase()} knee bowing outward from the hip-ankle alignment line`,
+            metricValue: Math.round(varusProx * 1000) / 1000,
+            metricLabel: 'knee lateral deviation (normalized)',
+          });
+        }
+      }
+    }
+
+    // 4. Pelvic tilt (hip line from horizontal)
     //    Signed: positive = right hip drops lower; higher abs = worse.
     if (angles.pelvicTiltDegrees != null) {
       const tilt = Math.abs(angles.pelvicTiltDegrees);
@@ -210,7 +234,59 @@ export function detectCompensations(
       }
     }
 
-    // 4. Bilateral symmetry (L vs R) — only valid from a frontal camera
+    // 5. Foot pronation (heel medial deviation — arch collapse / eversion)
+    for (const [side, pronation] of [
+      ['Left',  angles.leftFootPronation],
+      ['Right', angles.rightFootPronation],
+    ]) {
+      if (pronation != null) {
+        const sev = gradeFromThresholds(
+          pronation,
+          t.foot_pronation_b, t.foot_pronation_c, t.foot_pronation_d,
+          t.foot_pronation_e, t.foot_pronation_f,
+          false,
+        );
+        if (sev !== 'A') {
+          findings.push({
+            name: `${side} Foot Pronation`,
+            severity: sev,
+            description:
+              `${side.toLowerCase()} heel rolling inward relative to the ankle — ` +
+              'may indicate arch collapse, tibial internal rotation, or limited hip external rotation',
+            metricValue: Math.round(pronation * 1000) / 1000,
+            metricLabel: 'heel medial deviation (normalized)',
+          });
+        }
+      }
+    }
+
+    // 6. Foot supination (heel lateral deviation — inversion / lateral weight shift)
+    for (const [side, supination] of [
+      ['Left',  angles.leftFootSupination],
+      ['Right', angles.rightFootSupination],
+    ]) {
+      if (supination != null) {
+        const sev = gradeFromThresholds(
+          supination,
+          t.foot_supination_b, t.foot_supination_c, t.foot_supination_d,
+          t.foot_supination_e, t.foot_supination_f,
+          false,
+        );
+        if (sev !== 'A') {
+          findings.push({
+            name: `${side} Foot Supination`,
+            severity: sev,
+            description:
+              `${side.toLowerCase()} heel deviating outward relative to the ankle — ` +
+              'weight bearing on the lateral edge; may indicate tibial external rotation or hip abductor tightness',
+            metricValue: Math.round(supination * 1000) / 1000,
+            metricLabel: 'heel lateral deviation (normalized)',
+          });
+        }
+      }
+    }
+
+    // 7. Bilateral symmetry (L vs R) — only valid from a frontal camera
     // Hip flexion: skip for squat — 2D frontal projection of shoulder-hip-knee
     // is too noisy to reliably detect left-vs-right depth asymmetry.
     // Useful for lunge where one side is loaded significantly more.

@@ -41,11 +41,36 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
   ankle_df_f: 70.0,
 
   // Lateral trunk shift — normalised image coords (higher is worse)
+  // Kept for stats reference; frontal compensation check now uses lateral_flexion_*.
   lateral_shift_b: 0.015,
   lateral_shift_c: 0.02,
   lateral_shift_d: 0.05,
   lateral_shift_e: 0.065,
   lateral_shift_f: 0.08,
+
+  // Knee varus: lateral bow of knee from hip-ankle line, normalised by hip width.
+  // Positive = varus (knee bows outward); higher = worse.
+  knee_varus_b: 0.015,
+  knee_varus_c: 0.04,
+  knee_varus_d: 0.08,
+  knee_varus_e: 0.13,
+  knee_varus_f: 0.18,
+
+  // Foot pronation: heel medial deviation relative to ankle, normalised by hip width.
+  // Positive = pronation (arch collapse / eversion); higher = worse.
+  foot_pronation_b: 0.015,
+  foot_pronation_c: 0.04,
+  foot_pronation_d: 0.08,
+  foot_pronation_e: 0.12,
+  foot_pronation_f: 0.18,
+
+  // Foot supination: heel lateral deviation relative to ankle, normalised by hip width.
+  // Positive = supination (lateral weight shift / inversion); higher = worse.
+  foot_supination_b: 0.015,
+  foot_supination_c: 0.04,
+  foot_supination_d: 0.08,
+  foot_supination_e: 0.12,
+  foot_supination_f: 0.18,
 
   // Bilateral asymmetry ratio [0–1] (higher is worse)
   asymmetry_b: 0.05,
