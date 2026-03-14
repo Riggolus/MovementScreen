@@ -613,27 +613,86 @@ body {
 }
 .sens-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .sens-desc-text { font-size: 11px; color: var(--text-3); margin-bottom: 14px; line-height: 1.45; }
-.calibration-table {
-  width: 100%; border-collapse: collapse; font-size: 13px;
-  margin-bottom: 16px;
+/* Threshold filter tabs */
+.thresh-filter-row {
+  display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px;
 }
-.calibration-table th {
-  text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: .05em; color: var(--text-3); padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.calibration-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-.calibration-table tr:last-child td { border-bottom: none; }
-.calib-label { font-size: 13px; color: var(--text); }
-.calib-key { display: block; font-size: 10px; color: var(--text-3); margin-top: 1px; }
-.calib-current { color: var(--text-3); font-size: 13px; font-variant-numeric: tabular-nums; }
-.calib-input {
-  width: 80px; padding: 5px 8px; border-radius: var(--r-sm);
+.thresh-filter-btn {
+  padding: 5px 12px; border-radius: var(--r-sm);
   border: 1.5px solid var(--border); background: var(--surface-2);
-  font-size: 13px; font-family: inherit; color: var(--text);
-  text-align: right; font-variant-numeric: tabular-nums;
+  font-size: 12px; font-weight: 600; color: var(--text-2);
+  cursor: pointer; transition: all .15s; font-family: inherit;
 }
-.calib-input:focus { outline: none; border-color: var(--primary); background: var(--surface); }
+.thresh-filter-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.thresh-view-row { margin-top: -8px; margin-bottom: 14px; }
+.thresh-view-btn { font-size: 11px; padding: 4px 10px; opacity: .85; }
+/* Calibration cards */
+.calib-empty { font-size: 13px; color: var(--text-3); line-height: 1.55; }
+.calib-card {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 12px 14px; margin-bottom: 10px;
+}
+.calib-card-header {
+  display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px;
+}
+.calib-card-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.calib-card-mean  { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+
+/* Grade band visualisation */
+.calib-band {
+  position: relative; height: 12px; border-radius: 6px; overflow: visible;
+  margin-bottom: 14px; background: var(--surface);
+}
+.cband-zone { position: absolute; top: 0; height: 100%; }
+.cband-zone:first-child { border-radius: 6px 0 0 6px; }
+.cband-zone:last-child  { border-radius: 0 6px 6px 0; }
+.cband-a { background: var(--grade-a); opacity: .75; }
+.cband-b { background: var(--grade-b); opacity: .75; }
+.cband-c { background: var(--grade-c); opacity: .75; }
+.cband-d { background: var(--grade-d); opacity: .85; }
+/* White marker: user's measured average */
+.cband-marker {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 3px; height: 20px; background: #fff; border-radius: 2px;
+  box-shadow: 0 0 0 1.5px rgba(0,0,0,.5); z-index: 2; pointer-events: none;
+}
+/* Threshold tick lines: show where B/C/D grade boundaries are */
+.cband-tick {
+  position: absolute; top: 0; height: 100%; width: 2px;
+  transform: translateX(-50%); z-index: 1; pointer-events: none;
+  opacity: .6;
+}
+.cband-tick-b { background: color-mix(in srgb, var(--grade-b) 60%, #000 40%); }
+.cband-tick-c { background: color-mix(in srgb, var(--grade-c) 60%, #000 40%); }
+.cband-tick-d { background: color-mix(in srgb, var(--grade-d) 60%, #000 40%); }
+
+/* Slider rows */
+.calib-sliders { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.calib-slider-row { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.calib-slider-label {
+  width: 60px; font-weight: 700; flex-shrink: 0; font-size: 11px;
+}
+.cband-label-b { color: color-mix(in srgb, var(--grade-b) 60%, var(--text) 40%); }
+.cband-label-c { color: color-mix(in srgb, var(--grade-c) 60%, var(--text) 40%); }
+.cband-label-d { color: color-mix(in srgb, var(--grade-d) 60%, var(--text) 40%); }
+.calib-range {
+  flex: 1; min-width: 0; cursor: ew-resize;
+  accent-color: var(--primary); height: 4px;
+}
+.calib-input-unit { color: var(--text-3); font-size: 11px; flex-shrink: 0; }
+.calib-input {
+  width: 68px; padding: 4px 7px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--border); background: var(--surface);
+  font-size: 12px; font-family: inherit; color: var(--text);
+  text-align: right; font-variant-numeric: tabular-nums; flex-shrink: 0;
+}
+.calib-input:focus { outline: none; border-color: var(--primary); }
+/* "Saved" row at bottom of card */
+.calib-cur-row {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  padding-top: 6px; border-top: 1px solid var(--border);
+}
+.calib-cur-item { font-size: 10px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 
 /* ── Assessment instructions card ──────────────────────── */
 .instructions-title {
@@ -1298,6 +1357,16 @@ body {
   justify-content: flex-start; width: auto; gap: 8px;
 }
 .settings-section .btn-primary { margin-top: 16px; }
+.s-calib-picker {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+}
+.s-calib-picker-label { font-size: 12px; font-weight: 600; color: var(--text-3); white-space: nowrap; }
+.s-calib-select {
+  flex: 1; padding: 6px 10px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--border); background: var(--surface-2);
+  font-size: 13px; font-family: inherit; color: var(--text); cursor: pointer;
+}
+.s-calib-select:focus { outline: none; border-color: var(--primary); }
 
 /* Settings tabs */
 .settings-tabs {

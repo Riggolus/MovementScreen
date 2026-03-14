@@ -414,19 +414,21 @@ export function computeJointAngles(landmarks) {
     }
   }
 
-  // --- Heel rise (heel elevation relative to ankle, normalised by tibia length, lateral view) ---
-  // Positive = heel below ankle (normal); near-zero or negative = heel rising off the floor.
-  // NOTE: heel visibility is deliberately checked at a lower threshold (0.25) because from a
-  // lateral view at squat depth the heel sits behind the ankle and MediaPipe confidence drops
-  // below 0.5 even when the landmark position is still reliable.
-  for (const { heelRiseKey, kneeIdx, ankleIdx, heelIdx } of [
-    { heelRiseKey: 'heelRiseLeft',  kneeIdx: LM.LEFT_KNEE,  ankleIdx: LM.LEFT_ANKLE,  heelIdx: LM.LEFT_HEEL  },
-    { heelRiseKey: 'heelRiseRight', kneeIdx: LM.RIGHT_KNEE, ankleIdx: LM.RIGHT_ANKLE, heelIdx: LM.RIGHT_HEEL },
+  // --- Heel rise (heel elevation relative to ball of foot, normalised by tibia length, lateral view) ---
+  // Uses foot_index (ball of foot) as the ground reference — it stays on the ground and is reliably
+  // visible from lateral. Metric = (foot_index.y - heel.y) / tibiaLen.
+  // Both at ground level → ≈ 0. Heel risen → foot_index.y > heel.y → positive value.
+  // Higher is worse. The heel landmark visibility check is intentionally omitted: from a lateral
+  // squat at depth the calf occludes the heel, dropping MediaPipe confidence below useful thresholds
+  // even when the landmark position is still geometrically reasonable.
+  for (const { heelRiseKey, kneeIdx, ankleIdx, heelIdx, footIdx } of [
+    { heelRiseKey: 'heelRiseLeft',  kneeIdx: LM.LEFT_KNEE,  ankleIdx: LM.LEFT_ANKLE,  heelIdx: LM.LEFT_HEEL,  footIdx: LM.LEFT_FOOT_INDEX  },
+    { heelRiseKey: 'heelRiseRight', kneeIdx: LM.RIGHT_KNEE, ankleIdx: LM.RIGHT_ANKLE, heelIdx: LM.RIGHT_HEEL, footIdx: LM.RIGHT_FOOT_INDEX },
   ]) {
-    if (allVisible(landmarks, [kneeIdx, ankleIdx]) && landmarks[heelIdx].visibility > 0.25) {
+    if (allVisible(landmarks, [kneeIdx, ankleIdx, footIdx])) {
       const tibiaLen = landmarks[ankleIdx].y - landmarks[kneeIdx].y; // positive (ankle is below knee in image)
       if (tibiaLen > 0.01) {
-        angles[heelRiseKey] = (landmarks[heelIdx].y - landmarks[ankleIdx].y) / tibiaLen;
+        angles[heelRiseKey] = (landmarks[footIdx].y - landmarks[heelIdx].y) / tibiaLen;
       }
     }
   }

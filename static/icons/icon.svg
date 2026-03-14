@@ -1,4 +1,4 @@
-cla<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!-- Near-black rounded square background -->
   <rect width="512" height="512" rx="110" fill="#141414"/>
   <!-- Logo mark: two horizontal bars (full width + 65%) matching the header mark -->

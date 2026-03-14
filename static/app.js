@@ -1587,113 +1587,434 @@ function showToast(msg, type = 'success') {
 
 const SENS_MULT = { strict: 0.6, normal: 1.0, lenient: 1.6 };
 const SENS_DESC = {
-  strict:  'Strict: thresholds sit 40% closer to your optimal — flags minor deviations.',
-  normal:  'Normal: standard tolerance bands (10–30° beyond your captured optimum).',
-  lenient: 'Lenient: 60% wider tolerance — only flags clear compensations.',
+  strict:  'Strict: thresholds sit 40% closer to your norm — flags minor deviations.',
+  normal:  'Normal: standard tolerance bands (recommended for most users).',
+  lenient: 'Lenient: 60% wider bands — only flags clear compensations.',
 };
 
-// Each entry: (meanVal, screenType, sensitivityMultiplier) → [{key, value, label}]
+// Each entry maps a stat field to a calibration group descriptor.
+// (screenType) → { title, unit, lowerIsWorse, absRef, offsets[B,C,D], keys[B,C,D] }
+// offsets are added to (higherIsWorse) or subtracted from (lowerIsWorse) the baseline.
+// absRef=true means use |mean| as the baseline (for signed/bilateral metrics).
 const CALIBRATION_MAP = {
-  trunk_lean_degrees: (mean, screenType, m) => {
-    const p = screenType === 'squat' ? 'squat_trunk_lean' : 'trunk_lean';
-    return [
-      { key: `${p}_mild`,     value: mean + 10 * m, label: 'Mild lean trigger' },
-      { key: `${p}_moderate`, value: mean + 20 * m, label: 'Moderate lean trigger' },
-      { key: `${p}_severe`,   value: mean + 30 * m, label: 'Severe lean trigger' },
-    ];
-  },
-  tibial_angle_left: (mean, _, m) => [
-    { key: 'tibial_angle_restricted_mild',   value: mean - 5  * m, label: 'Tibial — mild restriction' },
-    { key: 'tibial_angle_restricted_severe', value: mean - 15 * m, label: 'Tibial — severe restriction' },
-  ],
-  tibial_angle_right: (mean, _, m) => [
-    { key: 'tibial_angle_restricted_mild',   value: mean - 5  * m, label: 'Tibial — mild restriction' },
-    { key: 'tibial_angle_restricted_severe', value: mean - 15 * m, label: 'Tibial — severe restriction' },
-  ],
-  left_knee_frontal_angle: (mean, _, m) => [
-    { key: 'knee_valgus_mild',     value: mean - 3  * m, label: 'Knee valgus mild trigger' },
-    { key: 'knee_valgus_moderate', value: mean - 7  * m, label: 'Knee valgus moderate trigger' },
-    { key: 'knee_valgus_severe',   value: mean - 15 * m, label: 'Knee valgus severe trigger' },
-  ],
-  right_knee_frontal_angle: (mean, _, m) => [
-    { key: 'knee_valgus_mild',     value: mean - 3  * m, label: 'Knee valgus mild trigger' },
-    { key: 'knee_valgus_moderate', value: mean - 7  * m, label: 'Knee valgus moderate trigger' },
-    { key: 'knee_valgus_severe',   value: mean - 15 * m, label: 'Knee valgus severe trigger' },
-  ],
-  pelvic_tilt_degrees: (mean, _, m) => {
-    const ref = Math.abs(mean);
-    return [
-      { key: 'pelvic_tilt_mild',     value: ref + 2 * m, label: 'Pelvic tilt — mild trigger' },
-      { key: 'pelvic_tilt_moderate', value: ref + 5 * m, label: 'Pelvic tilt — moderate trigger' },
-      { key: 'pelvic_tilt_severe',   value: ref + 9 * m, label: 'Pelvic tilt — severe trigger' },
-    ];
-  },
-  lateral_flexion_degrees: (mean, _, m) => {
-    const ref = Math.abs(mean);
-    return [
-      { key: 'lateral_flexion_mild',     value: ref + 5  * m, label: 'Lateral flexion — mild' },
-      { key: 'lateral_flexion_moderate', value: ref + 10 * m, label: 'Lateral flexion — moderate' },
-      { key: 'lateral_flexion_severe',   value: ref + 15 * m, label: 'Lateral flexion — severe' },
-    ];
-  },
-  upper_trunk_angle: (mean, _, m) => [
-    { key: 'upper_trunk_mild',     value: mean + 10 * m, label: 'Upper trunk — mild' },
-    { key: 'upper_trunk_moderate', value: mean + 20 * m, label: 'Upper trunk — moderate' },
-    { key: 'upper_trunk_severe',   value: mean + 30 * m, label: 'Upper trunk — severe' },
-  ],
-  lateral_trunk_shift: (mean, _, m) => {
-    const ref = Math.abs(mean);
-    return [
-      { key: 'lateral_shift_mild',     value: ref + 0.02 * m, label: 'Lateral shift — mild' },
-      { key: 'lateral_shift_moderate', value: ref + 0.04 * m, label: 'Lateral shift — moderate' },
-      { key: 'lateral_shift_severe',   value: ref + 0.07 * m, label: 'Lateral shift — severe' },
-    ];
-  },
+  trunk_lean_degrees: (screenType) => ({
+    title:        screenType === 'squat' ? 'Squat Trunk Lean' : 'Trunk Lean',
+    unit:         '°',
+    lowerIsWorse: false,
+    absRef:       false,
+    offsets:      [8, 14, 25],
+    keys:         screenType === 'squat'
+      ? ['squat_trunk_lean_b', 'squat_trunk_lean_c', 'squat_trunk_lean_d']
+      : ['trunk_lean_b', 'trunk_lean_c', 'trunk_lean_d'],
+  }),
+  tibial_angle_left: () => ({
+    title:        'Tibial Angle (Ankle DF Proxy)',
+    unit:         '°',
+    lowerIsWorse: true,
+    absRef:       false,
+    offsets:      [5, 10, 15],
+    keys:         ['tibial_angle_b', 'tibial_angle_c', 'tibial_angle_d'],
+  }),
+  tibial_angle_right: () => ({
+    title:        'Tibial Angle (Ankle DF Proxy)',
+    unit:         '°',
+    lowerIsWorse: true,
+    absRef:       false,
+    offsets:      [5, 10, 15],
+    keys:         ['tibial_angle_b', 'tibial_angle_c', 'tibial_angle_d'],
+  }),
+  left_knee_frontal_angle: () => ({
+    title:        'Knee Valgus',
+    unit:         '',
+    lowerIsWorse: false,
+    absRef:       false,
+    offsets:      [0.025, 0.05, 0.09],
+    keys:         ['knee_valgus_b', 'knee_valgus_c', 'knee_valgus_d'],
+  }),
+  right_knee_frontal_angle: () => ({
+    title:        'Knee Valgus',
+    unit:         '',
+    lowerIsWorse: false,
+    absRef:       false,
+    offsets:      [0.025, 0.05, 0.09],
+    keys:         ['knee_valgus_b', 'knee_valgus_c', 'knee_valgus_d'],
+  }),
+  pelvic_tilt_degrees: () => ({
+    title:        'Pelvic Tilt',
+    unit:         '°',
+    lowerIsWorse: false,
+    absRef:       true,
+    offsets:      [2, 4, 7],
+    keys:         ['pelvic_tilt_b', 'pelvic_tilt_c', 'pelvic_tilt_d'],
+  }),
+  lateral_flexion_degrees: () => ({
+    title:        'Lateral Trunk Flexion',
+    unit:         '°',
+    lowerIsWorse: false,
+    absRef:       true,
+    offsets:      [2, 4, 7],
+    keys:         ['lateral_flexion_b', 'lateral_flexion_c', 'lateral_flexion_d'],
+  }),
+  upper_trunk_angle: () => ({
+    title:        'Upper Trunk Angle',
+    unit:         '°',
+    lowerIsWorse: false,
+    absRef:       false,
+    offsets:      [5, 10, 18],
+    keys:         ['upper_trunk_b', 'upper_trunk_c', 'upper_trunk_d'],
+  }),
+  lateral_trunk_shift: () => ({
+    title:        'Lateral Trunk Shift',
+    unit:         '',
+    lowerIsWorse: false,
+    absRef:       true,
+    offsets:      [0.015, 0.025, 0.04],
+    keys:         ['lateral_shift_b', 'lateral_shift_c', 'lateral_shift_d'],
+  }),
+  hip_lateral_shift: () => ({
+    title:        'Hip Lateral Shift',
+    unit:         '',
+    lowerIsWorse: false,
+    absRef:       true,
+    offsets:      [0.04, 0.08, 0.14],
+    keys:         ['hip_shift_b', 'hip_shift_c', 'hip_shift_d'],
+  }),
+  shoulder_tilt_degrees: () => ({
+    title:        'Shoulder Tilt',
+    unit:         '°',
+    lowerIsWorse: false,
+    absRef:       true,
+    offsets:      [2, 3, 5],
+    keys:         ['shoulder_tilt_b', 'shoulder_tilt_c', 'shoulder_tilt_d'],
+  }),
+  heel_rise_left: () => ({
+    title:        'Heel Rise',
+    unit:         '',
+    lowerIsWorse: false,
+    absRef:       false,
+    offsets:      [0.04, 0.07, 0.11],
+    keys:         ['heel_rise_b', 'heel_rise_c', 'heel_rise_d'],
+  }),
+  heel_rise_right: () => ({
+    title:        'Heel Rise',
+    unit:         '',
+    lowerIsWorse: false,
+    absRef:       false,
+    offsets:      [0.04, 0.07, 0.11],
+    keys:         ['heel_rise_b', 'heel_rise_c', 'heel_rise_d'],
+  }),
 };
 
+// Static list of all threshold groups. Each group declares which tests it applies to
+// so the UI can filter by test tab. No recording data needed — sliders default to
+// current saved thresholds. userMeans markers are added opportunistically from history.
+const DIRECT_CALIB_GROUPS = [
+  // ── Frontal plane (anterior) ─────────────────────────────
+  { title: 'Knee Valgus',             unit: '',  lowerIsWorse: false, tests: ['squat','lunge'],              views: ['anterior'],
+    keys: ['knee_valgus_b',       'knee_valgus_c',       'knee_valgus_d'      ] },
+  { title: 'Knee Varus',              unit: '',  lowerIsWorse: false, tests: ['squat','lunge'],              views: ['anterior'],
+    keys: ['knee_varus_b',        'knee_varus_c',        'knee_varus_d'       ] },
+  { title: 'Pelvic Tilt',             unit: '°', lowerIsWorse: false, tests: ['squat','lunge','overhead'],   views: ['anterior'],
+    keys: ['pelvic_tilt_b',       'pelvic_tilt_c',       'pelvic_tilt_d'      ] },
+  { title: 'Lateral Trunk Flexion',   unit: '°', lowerIsWorse: false, tests: ['squat','lunge','overhead'],   views: ['anterior'],
+    keys: ['lateral_flexion_b',   'lateral_flexion_c',   'lateral_flexion_d'  ] },
+  { title: 'Shoulder Tilt',           unit: '°', lowerIsWorse: false, tests: ['squat','lunge','overhead'],   views: ['anterior'],
+    keys: ['shoulder_tilt_b',     'shoulder_tilt_c',     'shoulder_tilt_d'    ] },
+  { title: 'Hip Lateral Shift',       unit: '',  lowerIsWorse: false, tests: ['squat','lunge'],              views: ['anterior'],
+    keys: ['hip_shift_b',         'hip_shift_c',         'hip_shift_d'        ] },
+  { title: 'Lateral Trunk Shift',     unit: '',  lowerIsWorse: false, tests: ['squat','lunge'],              views: ['anterior'],
+    keys: ['lateral_shift_b',     'lateral_shift_c',     'lateral_shift_d'    ] },
+  // ── Sagittal plane (lateral) ─────────────────────────────
+  { title: 'Squat Trunk Lean',        unit: '°', lowerIsWorse: false, tests: ['squat'],                     views: ['lateral'],
+    keys: ['squat_trunk_lean_b',  'squat_trunk_lean_c',  'squat_trunk_lean_d' ] },
+  { title: 'Trunk Lean',              unit: '°', lowerIsWorse: false, tests: ['lunge','overhead'],           views: ['lateral'],
+    keys: ['trunk_lean_b',        'trunk_lean_c',        'trunk_lean_d'       ] },
+  { title: 'Tibial Angle (Ankle DF)', unit: '°', lowerIsWorse: true,  tests: ['squat','lunge'],              views: ['lateral'],
+    keys: ['tibial_angle_b',      'tibial_angle_c',      'tibial_angle_d'     ] },
+  { title: 'Upper Trunk Angle',       unit: '°', lowerIsWorse: false, tests: ['squat','lunge','overhead'],   views: ['lateral'],
+    keys: ['upper_trunk_b',       'upper_trunk_c',       'upper_trunk_d'      ] },
+  { title: 'Spine Curvature',         unit: '°', lowerIsWorse: false, tests: ['squat','lunge'],              views: ['lateral'],
+    keys: ['spine_curve_b',       'spine_curve_c',       'spine_curve_d'      ] },
+  { title: 'Head Forward Posture',    unit: '',  lowerIsWorse: false, tests: ['squat','lunge','overhead'],   views: ['lateral'],
+    keys: ['head_forward_b',      'head_forward_c',      'head_forward_d'     ] },
+  { title: 'Heel Rise',               unit: '',  lowerIsWorse: false, tests: ['squat','lunge'],              views: ['lateral'],
+    keys: ['heel_rise_b',         'heel_rise_c',         'heel_rise_d'        ] },
+  // ── Gait (lateral) ───────────────────────────────────────
+  { title: 'Gait: Swing Knee',        unit: '°', lowerIsWorse: false, tests: ['gait'],                      views: ['lateral'],
+    keys: ['gait_swing_knee_b',   'gait_swing_knee_c',   'gait_swing_knee_d'  ] },
+  { title: 'Gait: Trunk Lean',        unit: '°', lowerIsWorse: false, tests: ['gait'],                      views: ['lateral'],
+    keys: ['gait_trunk_lean_b',   'gait_trunk_lean_c',   'gait_trunk_lean_d'  ] },
+  { title: 'Gait: Tibial Angle',      unit: '°', lowerIsWorse: true,  tests: ['gait'],                      views: ['lateral'],
+    keys: ['gait_tibial_b',       'gait_tibial_c',       'gait_tibial_d'      ] },
+];
+
+const THRESH_FILTER_LABELS = { all: 'All', squat: 'Squat', lunge: 'Lunge', overhead: 'Overhead', gait: 'Gait' };
+const THRESH_VIEW_LABELS   = { all: 'All', anterior: 'Anterior', lateral: 'Lateral' };
+
+/**
+ * Render threshold sliders for all metrics, filterable by test.
+ * No recording data required. Optionally enriched with userMeans from history.
+ */
+function renderThresholdSliders(container, userMeans = {}, activeFilter = 'all', activeView = 'all') {
+  if (!container) return;
+  const current = getThresholds();
+
+  function fmt(v, unit = '') {
+    if (v == null) return '—';
+    const s = Math.abs(v) < 1 ? v.toFixed(3) : v.toFixed(1);
+    return unit ? s + unit : s;
+  }
+
+  // Filter by test
+  const byTest = activeFilter === 'all'
+    ? DIRECT_CALIB_GROUPS
+    : DIRECT_CALIB_GROUPS.filter(g => g.tests.includes(activeFilter));
+
+  // Determine which views are present for this test selection
+  const availableViews = [...new Set(byTest.flatMap(g => g.views))].sort();
+
+  // Filter by view
+  const visible = activeView === 'all'
+    ? byTest
+    : byTest.filter(g => g.views.includes(activeView));
+
+  // Test filter tabs
+  let html = `<div class="thresh-filter-row">`;
+  for (const [key, label] of Object.entries(THRESH_FILTER_LABELS)) {
+    html += `<button class="thresh-filter-btn${activeFilter === key ? ' active' : ''}" data-filter="${key}">${label}</button>`;
+  }
+  html += `</div>`;
+
+  // View filter tabs — only shown when multiple views exist for the current test
+  if (availableViews.length > 1) {
+    html += `<div class="thresh-filter-row thresh-view-row">`;
+    html += `<button class="thresh-filter-btn thresh-view-btn${activeView === 'all' ? ' active' : ''}" data-view="all">All</button>`;
+    for (const v of availableViews) {
+      html += `<button class="thresh-filter-btn thresh-view-btn${activeView === v ? ' active' : ''}" data-view="${v}">${THRESH_VIEW_LABELS[v] ?? v}</button>`;
+    }
+    html += `</div>`;
+  }
+
+  if (visible.length === 0) {
+    html += `<p class="calib-empty">No thresholds for this filter.</p>`;
+  } else {
+    for (const g of visible) {
+      const [bKey, cKey, dKey] = g.keys;
+      const bVal = current[bKey], cVal = current[cKey], dVal = current[dKey];
+      if (bVal == null) continue;
+
+      const userMean = userMeans[g.title] ?? null;
+      const isSmall  = Math.abs(bVal) < 1;
+      const step     = isSmall ? 0.001 : 0.5;
+      const { html: bandHtml, lo, hi } = renderCalibBand(g.lowerIsWorse, userMean, bVal, cVal, dVal);
+
+      html += `
+        <div class="calib-card">
+          <div class="calib-card-header">
+            <span class="calib-card-title">${g.title}</span>
+            ${userMean != null ? `<span class="calib-card-mean">Recorded avg: ${fmt(userMean, g.unit)}</span>` : ''}
+          </div>
+          ${bandHtml}
+          <div class="calib-sliders">
+            ${[{ key: bKey, th: 'b', label: 'Grade B' }, { key: cKey, th: 'c', label: 'Grade C' }, { key: dKey, th: 'd', label: 'Grade D' }].map(({ key, th, label }) => {
+              const v = current[key] ?? 0;
+              return `
+                <div class="calib-slider-row">
+                  <span class="calib-slider-label cband-label-${th}">${label}</span>
+                  <input class="calib-range" type="range"
+                    data-key="${key}" data-thresh="${th}"
+                    min="${lo}" max="${hi}" step="${step}" value="${v}"/>
+                  <input class="calib-input" type="number"
+                    data-key="${key}" data-thresh="${th}"
+                    step="${step}" value="${fmt(v, '')}"/>
+                  ${g.unit ? `<span class="calib-input-unit">${g.unit}</span>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  html += `
+    <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+      <button class="btn-primary" id="thresh-apply-btn">Save Changes</button>
+      <button class="btn-ghost"   id="thresh-reset-btn">Reset to Defaults</button>
+    </div>
+  `;
+  container.innerHTML = html;
+
+  // Test filter tab switching
+  container.querySelectorAll('.thresh-filter-btn:not(.thresh-view-btn)').forEach(btn =>
+    btn.addEventListener('click', () => renderThresholdSliders(container, userMeans, btn.dataset.filter, 'all'))
+  );
+  // View filter tab switching — preserve active test filter
+  container.querySelectorAll('.thresh-view-btn').forEach(btn =>
+    btn.addEventListener('click', () => renderThresholdSliders(container, userMeans, activeFilter, btn.dataset.view))
+  );
+
+  // Wire sliders ↔ number inputs with live band refresh
+  container.querySelectorAll('.calib-card').forEach(card => {
+    card.querySelectorAll('.calib-range').forEach(rangeEl => {
+      const th = rangeEl.dataset.thresh;
+      const numEl = card.querySelector(`.calib-input[data-thresh="${th}"]`);
+      const small = Math.abs(parseFloat(rangeEl.value)) < 1;
+      rangeEl.addEventListener('input', () => {
+        if (numEl) numEl.value = small ? parseFloat(rangeEl.value).toFixed(3) : parseFloat(rangeEl.value).toFixed(1);
+        refreshBand(card);
+      });
+      numEl?.addEventListener('input', () => { rangeEl.value = numEl.value; refreshBand(card); });
+    });
+  });
+
+  document.getElementById('thresh-apply-btn')?.addEventListener('click', () => {
+    const updates = {};
+    container.querySelectorAll('.calib-input').forEach(inp => {
+      const v = parseFloat(inp.value);
+      if (!isNaN(v)) updates[inp.dataset.key] = v;
+    });
+    try {
+      saveThresholdOverrides(updates);
+      showToast('Thresholds saved');
+    } catch { showToast('Failed to save', 'error'); }
+  });
+
+  document.getElementById('thresh-reset-btn')?.addEventListener('click', () => {
+    try {
+      localStorage.removeItem('ms_thresholds');
+      showToast('Thresholds reset to defaults');
+      renderThresholdSliders(container, userMeans, activeFilter, activeView);
+    } catch { showToast('Failed to reset', 'error'); }
+  });
+}
+
+/**
+ * Compute calibration groups from captured stats.
+ * Left/right variants with the same title are averaged into one group.
+ * Returns [{title, unit, lowerIsWorse, userMean, thresholds:[{key,label,current,suggested}]}]
+ */
 function computeCalibrationSuggestions(stats, screenType, sensitivity) {
   const m = SENS_MULT[sensitivity] || 1.0;
-  const keyAccum = {}; // key → {values[], label}
+  const current = getThresholds();
+  const groupMap = new Map(); // title → { group, means[] }
 
   for (const stat of stats) {
     const fn = CALIBRATION_MAP[stat.field];
     if (!fn || stat.mean == null) continue;
-    for (const { key, value, label } of fn(stat.mean, screenType, m)) {
-      if (!keyAccum[key]) keyAccum[key] = { values: [], label };
-      keyAccum[key].values.push(value);
-    }
+    const group = fn(screenType);
+    if (!groupMap.has(group.title)) groupMap.set(group.title, { group, means: [] });
+    groupMap.get(group.title).means.push(stat.mean);
   }
 
-  return Object.entries(keyAccum).map(([key, { values, label }]) => ({
-    key,
-    label,
-    // Average if multiple stats contribute to the same key (e.g. left+right tibial)
-    value: values.reduce((a, b) => a + b, 0) / values.length,
-  }));
+  return Array.from(groupMap.values()).map(({ group, means }) => {
+    const avgMean = means.reduce((a, b) => a + b, 0) / means.length;
+    const baseline = group.absRef ? Math.abs(avgMean) : avgMean;
+    const thresholds = group.keys.map((key, i) => ({
+      key,
+      label: ['Grade B', 'Grade C', 'Grade D'][i],
+      current: current[key] ?? null,
+      suggested: group.lowerIsWorse
+        ? baseline - group.offsets[i] * m
+        : baseline + group.offsets[i] * m,
+    }));
+    return { title: group.title, unit: group.unit, lowerIsWorse: group.lowerIsWorse, userMean: avgMean, thresholds };
+  });
 }
 
-function renderCalibrationPanel(data) {
-  const container = document.getElementById('calibration-panel');
+/**
+ * Render a horizontal grade-band for a calibration metric.
+ * Returns { html, lo, hi } — lo/hi are the display scale used for range slider min/max.
+ * bSug/cSug/dSug are the initial (suggested) threshold positions shown on the band.
+ */
+function renderCalibBand(lowerIsWorse, userMean, bSug, cSug, dSug) {
+  if (bSug == null || cSug == null || dSug == null) return { html: '', lo: 0, hi: 1 };
+  let lo, hi;
+  if (lowerIsWorse) {
+    hi = Math.max(bSug * 1.35, userMean != null ? userMean * 1.2 : bSug * 1.35);
+    lo = Math.min(dSug * 0.6,  userMean != null ? userMean * 0.75 : dSug * 0.6);
+  } else {
+    lo = 0;
+    hi = Math.max(dSug * 1.5, userMean != null ? userMean * 1.3 : dSug * 1.5, dSug + 0.001);
+  }
+  const range = hi - lo;
+  if (range <= 0) return { html: '', lo, hi };
+  const pct = v => Math.max(0, Math.min(100, ((v - lo) / range) * 100));
+
+  const zones = lowerIsWorse
+    ? [{ c: 'd', f: lo, t: dSug }, { c: 'c', f: dSug, t: cSug }, { c: 'b', f: cSug, t: bSug }, { c: 'a', f: bSug, t: hi }]
+    : [{ c: 'a', f: lo, t: bSug }, { c: 'b', f: bSug, t: cSug }, { c: 'c', f: cSug, t: dSug }, { c: 'd', f: dSug, t: hi }];
+
+  const zoneHtml = zones.map(({ c, f, t }) => {
+    const l = pct(f), w = Math.max(0, pct(t) - l);
+    return `<div class="cband-zone cband-${c}" data-zone="${c}" style="left:${l.toFixed(1)}%;width:${w.toFixed(1)}%"></div>`;
+  }).join('');
+
+  // Thin tick lines showing current threshold positions (updated by refreshBand)
+  const tickHtml = [['b', bSug], ['c', cSug], ['d', dSug]].map(([k, v]) =>
+    `<div class="cband-tick cband-tick-${k}" data-thresh-tick="${k}" style="left:${pct(v).toFixed(1)}%"></div>`
+  ).join('');
+
+  const markerHtml = userMean != null
+    ? `<div class="cband-marker" style="left:${pct(userMean).toFixed(1)}%"></div>`
+    : '';
+
+  const html = `<div class="calib-band" aria-hidden="true"
+    data-lo="${lo}" data-hi="${hi}" data-liw="${lowerIsWorse ? 1 : 0}"
+    >${zoneHtml}${tickHtml}${markerHtml}</div>`;
+  return { html, lo, hi };
+}
+
+/** Update band zones and tick lines in-place when slider values change. */
+function refreshBand(card) {
+  const band = card.querySelector('.calib-band');
+  if (!band) return;
+  const lo  = parseFloat(band.dataset.lo);
+  const hi  = parseFloat(band.dataset.hi);
+  const liw = band.dataset.liw === '1';
+  const range = hi - lo;
+  if (range <= 0) return;
+  const pct = v => Math.max(0, Math.min(100, ((v - lo) / range) * 100));
+
+  const bVal = parseFloat(card.querySelector('.calib-input[data-thresh="b"]')?.value);
+  const cVal = parseFloat(card.querySelector('.calib-input[data-thresh="c"]')?.value);
+  const dVal = parseFloat(card.querySelector('.calib-input[data-thresh="d"]')?.value);
+  if (isNaN(bVal) || isNaN(cVal) || isNaN(dVal)) return;
+
+  const zones = liw
+    ? [{ z: 'd', f: lo, t: dVal }, { z: 'c', f: dVal, t: cVal }, { z: 'b', f: cVal, t: bVal }, { z: 'a', f: bVal, t: hi }]
+    : [{ z: 'a', f: lo, t: bVal }, { z: 'b', f: bVal, t: cVal }, { z: 'c', f: cVal, t: dVal }, { z: 'd', f: dVal, t: hi }];
+
+  for (const { z, f, t } of zones) {
+    const el = band.querySelector(`[data-zone="${z}"]`);
+    if (!el) continue;
+    const l = pct(f), w = Math.max(0, pct(t) - l);
+    el.style.left  = `${l.toFixed(1)}%`;
+    el.style.width = `${w.toFixed(1)}%`;
+  }
+  for (const [k, val] of [['b', bVal], ['c', cVal], ['d', dVal]]) {
+    const tick = band.querySelector(`[data-thresh-tick="${k}"]`);
+    if (tick) tick.style.left = `${pct(val).toFixed(1)}%`;
+  }
+}
+
+function renderCalibrationPanel(data, containerEl) {
+  const container = containerEl ?? document.getElementById('calibration-panel');
   if (!container) return;
 
   let sensitivity = 'normal';
-  // Build currentThresholds in the same shape renderAdminPage expects
-  const _current = getThresholds();
-  let currentThresholds = {};
-  for (const key of Object.keys(DEFAULT_THRESHOLDS)) {
-    currentThresholds[key] = { value: _current[key], default: DEFAULT_THRESHOLDS[key] };
-  }
 
-  function fmt(v) {
+  function fmt(v, unit = '') {
     if (v == null) return '—';
-    return Math.abs(v) < 1 ? v.toFixed(3) : v.toFixed(1);
+    const s = Math.abs(v) < 1 ? v.toFixed(3) : v.toFixed(1);
+    return unit ? s + unit : s;
   }
 
   function drawPanel() {
-    const suggestions = computeCalibrationSuggestions(data.stats, data.screen_type, sensitivity);
+    const groups = computeCalibrationSuggestions(data.stats, data.screen_type, sensitivity);
 
-    if (suggestions.length === 0) {
-      container.innerHTML = `<p style="color:var(--text-3);font-size:13px">No calibratable metrics captured. Try a lateral view for sagittal calibration, or anterior for frontal-plane calibration.</p>`;
+    if (groups.length === 0) {
+      container.innerHTML = `<p class="calib-empty">No calibratable metrics captured for this recording. Try a lateral view for sagittal metrics (tibial angle, trunk lean), or anterior for frontal-plane metrics (valgus, pelvic tilt).</p>`;
       return;
     }
 
@@ -1707,26 +2028,64 @@ function renderCalibrationPanel(data) {
         </div>
       </div>
       <p class="sens-desc-text">${SENS_DESC[sensitivity]}</p>
-      <table class="calibration-table">
-        <thead><tr><th>Threshold</th><th>Current</th><th>Suggested</th></tr></thead>
-        <tbody>
-          ${suggestions.map(s => `
-            <tr>
-              <td class="calib-label">
-                ${s.label}
-                <span class="calib-key">${s.key.replace(/_/g, ' ')}</span>
-              </td>
-              <td class="calib-current">${currentThresholds[s.key] ? fmt(currentThresholds[s.key].value) : '—'}</td>
-              <td><input class="calib-input" type="number" step="0.1" data-key="${s.key}" value="${fmt(s.value)}"/></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-      <button class="btn-primary" id="apply-calib-btn">
-        Apply ${suggestions.length} Threshold Update${suggestions.length !== 1 ? 's' : ''}
-      </button>
     `;
+
+    for (const g of groups) {
+      const [bT, cT, dT] = g.thresholds;
+      const isSmall = Math.abs(bT.suggested) < 1;
+      const step = isSmall ? 0.001 : 0.5;
+      const { html: bandHtml, lo, hi } = renderCalibBand(g.lowerIsWorse, g.userMean, bT.suggested, cT.suggested, dT.suggested);
+
+      html += `
+        <div class="calib-card">
+          <div class="calib-card-header">
+            <span class="calib-card-title">${g.title}</span>
+            <span class="calib-card-mean">Your avg: ${fmt(g.userMean, g.unit)}</span>
+          </div>
+          ${bandHtml}
+          <div class="calib-sliders">
+            ${g.thresholds.map((t, i) => {
+              const th = 'bcd'[i];
+              return `
+                <div class="calib-slider-row">
+                  <span class="calib-slider-label cband-label-${th}">${t.label}</span>
+                  <input class="calib-range" type="range"
+                    data-key="${t.key}" data-thresh="${th}"
+                    min="${lo}" max="${hi}" step="${step}" value="${t.suggested}"/>
+                  <input class="calib-input" type="number"
+                    data-key="${t.key}" data-thresh="${th}"
+                    step="${step}" value="${fmt(t.suggested, '')}"/>
+                  ${g.unit ? `<span class="calib-input-unit">${g.unit}</span>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <div class="calib-cur-row">
+            ${g.thresholds.map(t => `<span class="calib-cur-item">Saved ${t.label}: ${fmt(t.current, g.unit)}</span>`).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    html += `<button class="btn-primary" id="apply-calib-btn" style="margin-top:12px">Apply Calibration</button>`;
     container.innerHTML = html;
+
+    // Wire up sliders ↔ number inputs with live band refresh
+    container.querySelectorAll('.calib-card').forEach(card => {
+      card.querySelectorAll('.calib-range').forEach(rangeEl => {
+        const th = rangeEl.dataset.thresh;
+        const numEl = card.querySelector(`.calib-input[data-thresh="${th}"]`);
+        const small = Math.abs(parseFloat(rangeEl.value)) < 1;
+        rangeEl.addEventListener('input', () => {
+          if (numEl) numEl.value = small ? parseFloat(rangeEl.value).toFixed(3) : parseFloat(rangeEl.value).toFixed(1);
+          refreshBand(card);
+        });
+        numEl?.addEventListener('input', () => {
+          rangeEl.value = numEl.value;
+          refreshBand(card);
+        });
+      });
+    });
 
     container.querySelectorAll('.sens-btn').forEach(btn =>
       btn.addEventListener('click', () => { sensitivity = btn.dataset.sens; drawPanel(); })
@@ -1738,20 +2097,10 @@ function renderCalibrationPanel(data) {
         const v = parseFloat(inp.value);
         if (!isNaN(v)) updates[inp.dataset.key] = v;
       });
-      const btn = document.getElementById('apply-calib-btn');
       try {
         saveThresholdOverrides(updates);
-        // Refresh currentThresholds and re-render current column
-        const refreshed = getThresholds();
-        for (const key of Object.keys(DEFAULT_THRESHOLDS)) {
-          currentThresholds[key] = { value: refreshed[key], default: DEFAULT_THRESHOLDS[key] };
-        }
-        container.querySelectorAll('.calib-current').forEach((td, i) => {
-          const key = suggestions[i]?.key;
-          if (key && currentThresholds[key]) td.textContent = fmt(currentThresholds[key].value);
-        });
         showToast('Thresholds calibrated from recording');
-        btn.textContent = `✓ Applied`;
+        drawPanel();
       } catch {
         showToast('Failed to apply', 'error');
       }
@@ -2493,11 +2842,8 @@ function loadSettings(activeTab = 'profile') {
         </div>
         <div class="settings-section">
           <p class="settings-section-title">Threshold Calibration</p>
-          <p class="settings-section-desc">Customise the sensitivity of compensation detection.</p>
-          <button class="btn-ghost" id="s-open-thresholds">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
-            Open Thresholds
-          </button>
+          <p class="settings-section-desc">Adjust detection thresholds based on your recorded movement data.</p>
+          <div id="s-calib-panel"></div>
         </div>
       </div>
     </div>
@@ -2567,8 +2913,32 @@ function loadSettings(activeTab = 'profile') {
       showTutorialOnly(() => { obOverlay.classList.add('hidden'); showView('settings'); });
     });
   }
-  const threshBtn = document.getElementById('s-open-thresholds');
-  if (threshBtn) threshBtn.addEventListener('click', loadAdminPage);
+  // Render threshold sliders immediately on Advanced tab (no recording needed)
+  if (activeTab === 'advanced') {
+    const calibPanel = document.getElementById('s-calib-panel');
+    if (calibPanel) {
+      // Render sliders immediately with current thresholds
+      renderThresholdSliders(calibPanel);
+      // Then try to enrich with avg markers from the most recent recording
+      getAssessments().then(assessments => {
+        const recent = [...assessments].reverse().find(a => a.stats?.length > 0);
+        if (!recent) return;
+        // Build a title → userMean map from the recording stats
+        const userMeans = {};
+        for (const stat of recent.stats) {
+          const fn = CALIBRATION_MAP[stat.field];
+          if (!fn || stat.mean == null) continue;
+          const { title, absRef } = fn(recent.screen_type);
+          const existing = userMeans[title];
+          const val = absRef ? Math.abs(stat.mean) : stat.mean;
+          userMeans[title] = existing == null ? val : (existing + val) / 2;
+        }
+        if (Object.keys(userMeans).length > 0) {
+          renderThresholdSliders(calibPanel, userMeans);
+        }
+      }).catch(() => {}); // silently skip if no DB
+    }
+  }
 
   showView('settings');
 }
