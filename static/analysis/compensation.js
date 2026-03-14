@@ -495,9 +495,8 @@ export function detectCompensations(
     }
 
     // 13. Heel rise (lateral squat)
-    //     Measures vertical heel elevation relative to the ankle, normalised by tibia length.
-    //     Positive = heel well below ankle (normal); near-zero or negative = heel rising off the floor.
-    //     Lower is worse.
+    //     (foot_index.y - heel.y) / tibiaLen: 0 = flat foot, positive = heel risen above ball of foot.
+    //     Higher is worse.
     for (const [side, heelRise] of [
       ['Left',  angles.heelRiseLeft],
       ['Right', angles.heelRiseRight],
@@ -507,7 +506,7 @@ export function detectCompensations(
           heelRise,
           t.heel_rise_b, t.heel_rise_c, t.heel_rise_d,
           t.heel_rise_e, t.heel_rise_f,
-          true,
+          false,
         );
         if (sev !== 'A') {
           findings.push({
@@ -517,7 +516,7 @@ export function detectCompensations(
               `${side.toLowerCase()} heel elevating off the floor during the squat — ` +
               'suggests limited ankle dorsiflexion, tight calf complex, or weight shifting onto the forefoot',
             metricValue: Math.round(heelRise * 1000) / 1000,
-            metricLabel: 'heel-ankle offset (tibia-normalised)',
+            metricLabel: 'heel rise above ball of foot (tibia-normalised)',
           });
         }
       }

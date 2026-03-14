@@ -48,7 +48,6 @@ const MIN_IS_WORSE = new Set([
   'leftAnkleDorsiflexion', 'rightAnkleDorsiflexion',
   'tibialAngleLeft', 'tibialAngleRight',
   'spineSegmentalAngle',
-  'heelRiseLeft', 'heelRiseRight',
 ]);
 
 // Fields where HIGHER is worse — use 75th percentile
@@ -58,6 +57,7 @@ const MAX_IS_WORSE = new Set([
   'upperTrunkAngle',
   'leftKneeFrontalAngle', 'rightKneeFrontalAngle',
   'leftFootPronation',    'rightFootPronation',
+  'heelRiseLeft',         'heelRiseRight',
 ]);
 
 // Fields handled with signed-abs 75th-percentile strategy
@@ -258,15 +258,16 @@ export function createAggregator(screenName) {
 
     // Knee varus proxies: 40th percentile of frontal angle (most negative = worst varus),
     // negated so positive = varus magnitude for grading. Uses same deep-frame subset as valgus.
-    // 40th percentile (vs 25th for valgus) requires the lateral bow to be present in most
-    // deep frames before flagging — reduces false positives from landmark noise.
+    // Guard: only compute if the MEDIAN frontal angle is negative — a person with genuine varus
+    // has consistently outward-bowing knees. Neutral or valgus knees may produce a few negative
+    // frames from landmark noise; requiring a negative median prevents false positives.
     for (const [varusKey, frontalKey] of [
       ['leftKneeVarusProx',  'leftKneeFrontalAngle'],
       ['rightKneeVarusProx', 'rightKneeFrontalAngle'],
     ]) {
       const src = depthFrames.length > 0 ? depthFrames : frames;
       const vals = src.map(f => f[frontalKey]).filter(v => v != null).sort((a, b) => a - b);
-      if (vals.length > 0) {
+      if (vals.length > 0 && median(vals) < 0) {
         const idx = Math.max(0, Math.floor(vals.length * 0.40));
         worst[varusKey] = -vals[idx]; // negate: positive = varus magnitude
       }
