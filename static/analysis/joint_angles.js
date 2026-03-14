@@ -141,6 +141,8 @@ export function computeJointAngles(landmarks) {
     rightElbowAngle: null,
     leftKneeFrontalAngle: null,
     rightKneeFrontalAngle: null,
+    leftKneeAnkleDeviation: null,
+    rightKneeAnkleDeviation: null,
     tibialAngleLeft: null,
     tibialAngleRight: null,
     pelvicTiltDegrees: null,
@@ -331,6 +333,35 @@ export function computeJointAngles(landmarks) {
               angles.rightKneeFrontalAngle = deviation;
             }
           }
+        }
+      }
+    }
+  }
+
+  // --- Ankle-vertical knee deviation (varus metric, frontal camera) ---
+  // Uses the ankle as a fixed ground reference instead of the hip-ankle alignment line.
+  // This removes the hip from the equation entirely: lateral hip shift moves the hip but NOT
+  // the planted ankle, so a neutral knee above the ankle scores 0 regardless of hip position.
+  // Positive = knee medial to ankle = valgus-like; negative = knee lateral to ankle = varus.
+  // Normalised by hip width for body-size independence. Same 0.06 minimum guard as above.
+  if (bilateralVisible(landmarks, LM.LEFT_HIP, LM.RIGHT_HIP)) {
+    const hw = Math.abs(landmarks[LM.LEFT_HIP].x - landmarks[LM.RIGHT_HIP].x);
+    if (hw > 0.06) {
+      for (const { side, kneeIdx, ankleIdx } of [
+        { side: 'left',  kneeIdx: LM.LEFT_KNEE,  ankleIdx: LM.LEFT_ANKLE  },
+        { side: 'right', kneeIdx: LM.RIGHT_KNEE, ankleIdx: LM.RIGHT_ANKLE },
+      ]) {
+        if (allVisible(landmarks, [kneeIdx, ankleIdx])) {
+          const kx = landmarks[kneeIdx].x;
+          const ax = landmarks[ankleIdx].x;
+          // Left leg sits on the right side of the image (large x).
+          //   Varus = knee bows laterally = knee.x > ankle.x = positive ax - kx is negative.
+          //   So: deviation = (ax - kx) / hw; negative = varus, positive = valgus.
+          // Right leg sits on the left side (small x).
+          //   Varus = knee bows laterally = knee.x < ankle.x = positive kx - ax is negative.
+          //   So: deviation = (kx - ax) / hw; negative = varus, positive = valgus.
+          if (side === 'left')  angles.leftKneeAnkleDeviation  = (ax - kx) / hw;
+          else                  angles.rightKneeAnkleDeviation = (kx - ax) / hw;
         }
       }
     }

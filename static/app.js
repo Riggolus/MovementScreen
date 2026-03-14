@@ -1711,8 +1711,11 @@ const CALIBRATION_MAP = {
 // current saved thresholds. userMeans markers are added opportunistically from history.
 const DIRECT_CALIB_GROUPS = [
   // ── Frontal plane (anterior) ─────────────────────────────
-  { title: 'Knee Valgus',             unit: '',  lowerIsWorse: false, tests: ['squat','lunge'],  views: ['anterior'],
-    keys: ['knee_valgus_b', 'knee_valgus_c', 'knee_valgus_d'] },
+  { title: 'Knee Frontal Deviation',  unit: '',  bidirectional: true,
+    positiveLabel: 'Valgus', negativeLabel: 'Varus',
+    tests: ['squat','lunge'], views: ['anterior'],
+    positiveKeys: ['knee_valgus_b', 'knee_valgus_c', 'knee_valgus_d'],
+    negativeKeys: ['knee_varus_b',  'knee_varus_c',  'knee_varus_d'] },
   { title: 'Foot Frontal Deviation',  unit: '',  bidirectional: true,
     positiveLabel: 'Pronation', negativeLabel: 'Supination',
     tests: ['squat','lunge'], views: ['anterior'],
