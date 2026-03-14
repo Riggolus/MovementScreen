@@ -256,8 +256,10 @@ export function createAggregator(screenName) {
       }
     }
 
-    // Knee varus proxies: 25th percentile of frontal angle (most negative = worst varus),
+    // Knee varus proxies: 40th percentile of frontal angle (most negative = worst varus),
     // negated so positive = varus magnitude for grading. Uses same deep-frame subset as valgus.
+    // 40th percentile (vs 25th for valgus) requires the lateral bow to be present in most
+    // deep frames before flagging — reduces false positives from landmark noise.
     for (const [varusKey, frontalKey] of [
       ['leftKneeVarusProx',  'leftKneeFrontalAngle'],
       ['rightKneeVarusProx', 'rightKneeFrontalAngle'],
@@ -265,7 +267,7 @@ export function createAggregator(screenName) {
       const src = depthFrames.length > 0 ? depthFrames : frames;
       const vals = src.map(f => f[frontalKey]).filter(v => v != null).sort((a, b) => a - b);
       if (vals.length > 0) {
-        const idx = Math.max(0, Math.floor(vals.length * 0.25));
+        const idx = Math.max(0, Math.floor(vals.length * 0.40));
         worst[varusKey] = -vals[idx]; // negate: positive = varus magnitude
       }
     }
