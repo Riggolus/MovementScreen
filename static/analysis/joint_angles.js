@@ -416,11 +416,14 @@ export function computeJointAngles(landmarks) {
 
   // --- Heel rise (heel elevation relative to ankle, normalised by tibia length, lateral view) ---
   // Positive = heel below ankle (normal); near-zero or negative = heel rising off the floor.
+  // NOTE: heel visibility is deliberately checked at a lower threshold (0.25) because from a
+  // lateral view at squat depth the heel sits behind the ankle and MediaPipe confidence drops
+  // below 0.5 even when the landmark position is still reliable.
   for (const { heelRiseKey, kneeIdx, ankleIdx, heelIdx } of [
     { heelRiseKey: 'heelRiseLeft',  kneeIdx: LM.LEFT_KNEE,  ankleIdx: LM.LEFT_ANKLE,  heelIdx: LM.LEFT_HEEL  },
     { heelRiseKey: 'heelRiseRight', kneeIdx: LM.RIGHT_KNEE, ankleIdx: LM.RIGHT_ANKLE, heelIdx: LM.RIGHT_HEEL },
   ]) {
-    if (allVisible(landmarks, [kneeIdx, ankleIdx, heelIdx])) {
+    if (allVisible(landmarks, [kneeIdx, ankleIdx]) && landmarks[heelIdx].visibility > 0.25) {
       const tibiaLen = landmarks[ankleIdx].y - landmarks[kneeIdx].y; // positive (ankle is below knee in image)
       if (tibiaLen > 0.01) {
         angles[heelRiseKey] = (landmarks[heelIdx].y - landmarks[ankleIdx].y) / tibiaLen;

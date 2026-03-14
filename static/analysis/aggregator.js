@@ -256,8 +256,10 @@ export function createAggregator(screenName) {
       }
     }
 
-    // Knee varus proxies: 25th percentile of frontal angle (most negative = worst varus),
+    // Knee varus proxies: 40th percentile of frontal angle (most negative = worst varus),
     // negated so positive = varus magnitude for grading. Uses same deep-frame subset as valgus.
+    // 40th percentile (vs 25th for valgus) requires the lateral bow to be present in most
+    // deep frames before flagging — reduces false positives from landmark noise.
     for (const [varusKey, frontalKey] of [
       ['leftKneeVarusProx',  'leftKneeFrontalAngle'],
       ['rightKneeVarusProx', 'rightKneeFrontalAngle'],
@@ -265,7 +267,7 @@ export function createAggregator(screenName) {
       const src = depthFrames.length > 0 ? depthFrames : frames;
       const vals = src.map(f => f[frontalKey]).filter(v => v != null).sort((a, b) => a - b);
       if (vals.length > 0) {
-        const idx = Math.max(0, Math.floor(vals.length * 0.25));
+        const idx = Math.max(0, Math.floor(vals.length * 0.40));
         worst[varusKey] = -vals[idx]; // negate: positive = varus magnitude
       }
     }
@@ -304,8 +306,33 @@ export function createAggregator(screenName) {
           metricValue: 0,
           metricLabel: 'max depth ratio',
         });
-      } else if (cameraAngle !== 'lateral' && maxDepthRatio < FRONTAL_FULL_DEPTH_FRACTION) {
-        // Frames captured but depth was reduced — compensations are analysed but depth is flagged
+      } else if (cameraAngle === 'lateral') {
+        // Lateral depth check: grade by minimum knee angle reached.
+        // All captured frames are already below the 115° gate; we want to know
+        // how far below it they got. Optimal depth ≈ 90° (parallel) or lower.
+        const nearKneeKey = lateralSide === 'right' ? 'rightKneeFlexion' : 'leftKneeFlexion';
+        const kneeAngles = frames.map(f => f[nearKneeKey]).filter(v => v != null);
+        if (kneeAngles.length > 0) {
+          const minKnee = Math.min(...kneeAngles);
+          let sev = null;
+          if      (minKnee >= 108) sev = 'D'; // barely past gate — very shallow
+          else if (minKnee >= 100) sev = 'C'; // clearly partial squat
+          else if (minKnee >= 92)  sev = 'B'; // near-parallel but short of full depth
+          if (sev) {
+            rawFindings.push({
+              name: 'Reduced Squat Depth',
+              severity: sev,
+              description:
+                `Deepest knee angle reached: ${Math.round(minKnee)}°. ` +
+                'Aim for ≤ 90° (thighs parallel or below) for a complete assessment. ' +
+                'Limited depth may indicate ankle dorsiflexion restriction or hip mobility limitation.',
+              metricValue: Math.round(minKnee),
+              metricLabel: 'min knee angle (deg)',
+            });
+          }
+        }
+      } else if (maxDepthRatio < FRONTAL_FULL_DEPTH_FRACTION) {
+        // Frontal: frames captured but depth was reduced
         rawFindings.push({
           name: 'Reduced Squat Depth',
           severity: 'C',

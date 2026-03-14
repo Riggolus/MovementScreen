@@ -50,11 +50,13 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
 
   // Knee varus: lateral bow of knee from hip-ankle line, normalised by hip width.
   // Positive = varus (knee bows outward); higher = worse.
-  knee_varus_b: 0.015,
-  knee_varus_c: 0.04,
-  knee_varus_d: 0.08,
-  knee_varus_e: 0.13,
-  knee_varus_f: 0.18,
+  // Thresholds raised vs valgus — varus proxy uses 40th-percentile of deep frames
+  // so it needs a genuine persistent lateral bow, not just noise-floor fluctuation.
+  knee_varus_b: 0.04,   // ~4% hip-width — clears landmark noise floor (~±0.02)
+  knee_varus_c: 0.07,   // ~7% — noticeable lateral tracking
+  knee_varus_d: 0.11,   // ~11% — clinically significant
+  knee_varus_e: 0.15,
+  knee_varus_f: 0.20,
 
   // Foot pronation: heel medial deviation relative to ankle, normalised by hip width.
   // Positive = pronation (arch collapse / eversion); higher = worse.
