@@ -175,14 +175,16 @@ export function detectCompensations(
       }
     }
 
-    // 3. Knee varus (lateral bow — negative side of the frontal angle, stored as proxy)
-    for (const [side, varusProx] of [
-      ['Left',  angles.leftKneeVarusProx],
-      ['Right', angles.rightKneeVarusProx],
+    // 3. Knee varus (lateral bow — knee outside ankle vertical)
+    //    Uses ankle-vertical reference: immune to lateral hip shift.
+    //    Positive proxy value = knee bowing laterally beyond the ankle = varus.
+    for (const [side, varusProxy] of [
+      ['Left',  angles.leftKneeVarus],
+      ['Right', angles.rightKneeVarus],
     ]) {
-      if (varusProx != null) {
+      if (varusProxy != null) {
         const sev = gradeFromThresholds(
-          varusProx,
+          varusProxy,
           t.knee_varus_b, t.knee_varus_c, t.knee_varus_d,
           t.knee_varus_e, t.knee_varus_f,
           false,
@@ -191,8 +193,8 @@ export function detectCompensations(
           findings.push({
             name: `${side} Knee Varus`,
             severity: sev,
-            description: `${side.toLowerCase()} knee bowing outward from the hip-ankle alignment line`,
-            metricValue: Math.round(varusProx * 1000) / 1000,
+            description: `${side.toLowerCase()} knee bowing laterally beyond the ankle — may indicate tibial torsion, weak hip abductors, or structural genu varum`,
+            metricValue: Math.round(varusProxy * 1000) / 1000,
             metricLabel: 'knee lateral deviation (normalized)',
           });
         }

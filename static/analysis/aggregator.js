@@ -256,21 +256,24 @@ export function createAggregator(screenName) {
       }
     }
 
-    // Knee varus proxies: 40th percentile of frontal angle (most negative = worst varus),
-    // negated so positive = varus magnitude for grading. Uses same deep-frame subset as valgus.
-    // Guard: only compute if the MEDIAN frontal angle is below −0.02 — this requires the
-    // person's knees to be consistently and clearly bowing outward beyond the landmark noise
-    // floor (~±0.02 hip-widths). Neutral or valgus knees can produce a slightly negative
-    // median from noise; the −0.02 floor prevents those false positives.
-    for (const [varusKey, frontalKey] of [
-      ['leftKneeVarusProx',  'leftKneeFrontalAngle'],
-      ['rightKneeVarusProx', 'rightKneeFrontalAngle'],
+    // Knee varus proxies: 25th percentile of ankle-vertical deviation values (most negative
+    // = worst varus), negated so positive = varus magnitude for grading.
+    // Uses the ankle as a fixed ground reference — immune to lateral hip shift.
+    // Uses same deep-frame subset as valgus for the same reason.
+    for (const [varusKey, devKey] of [
+      ['leftKneeVarus',  'leftKneeAnkleDeviation'],
+      ['rightKneeVarus', 'rightKneeAnkleDeviation'],
     ]) {
-      const src = depthFrames.length > 0 ? depthFrames : frames;
-      const vals = src.map(f => f[frontalKey]).filter(v => v != null).sort((a, b) => a - b);
-      if (vals.length > 0 && median(vals) < -0.02) {
-        const idx = Math.max(0, Math.floor(vals.length * 0.40));
-        worst[varusKey] = -vals[idx]; // negate: positive = varus magnitude
+      const sourceFrames = depthFrames.length > 0 ? depthFrames : frames;
+      const vals = sourceFrames.map(f => f[devKey]).filter(v => v != null).sort((a, b) => a - b);
+      if (vals.length > 0) {
+        // 25th percentile is the most negative value (worst varus end of the distribution)
+        const idx = Math.max(0, Math.floor(vals.length * 0.25));
+        const p25 = vals[idx];
+        // Only set varus proxy if the distribution genuinely leans negative
+        if (p25 < -0.02) {
+          worst[varusKey] = -p25; // negate so positive = varus magnitude
+        }
       }
     }
 

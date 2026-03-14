@@ -407,7 +407,7 @@ function beginRecording() {
   debugDepthFrames = 0;
   document.getElementById('position-overlay').classList.add('hidden');
   nextAngleBtn.classList.add('hidden'); // hidden until minimum frames collected
-  debugOverlay.classList.remove('hidden');
+  if (getShowAngleOverlay()) debugOverlay.classList.remove('hidden');
   isRecording = true;
   startTimer();
 }
@@ -485,6 +485,7 @@ function row(label, value, cls = '') {
 }
 
 function updateDebugOverlay(angles, depthRatio, atDepth, capturedFrames, depthFrameCount) {
+  if (!getShowAngleOverlay()) return;
   const fmt = v => (v == null ? '—' : v.toFixed(3));
   const fmtDeg = v => (v == null ? '—' : v.toFixed(1) + '°');
 
@@ -1714,8 +1715,8 @@ const DIRECT_CALIB_GROUPS = [
   { title: 'Knee Frontal Deviation',  unit: '',  bidirectional: true,
     positiveLabel: 'Valgus', negativeLabel: 'Varus',
     tests: ['squat','lunge'], views: ['anterior'],
-    positiveKeys: ['knee_valgus_b',    'knee_valgus_c',    'knee_valgus_d'   ],
-    negativeKeys: ['knee_varus_b',     'knee_varus_c',     'knee_varus_d'    ] },
+    positiveKeys: ['knee_valgus_b', 'knee_valgus_c', 'knee_valgus_d'],
+    negativeKeys: ['knee_varus_b',  'knee_varus_c',  'knee_varus_d'] },
   { title: 'Foot Frontal Deviation',  unit: '',  bidirectional: true,
     positiveLabel: 'Pronation', negativeLabel: 'Supination',
     tests: ['squat','lunge'], views: ['anterior'],
@@ -2550,6 +2551,17 @@ function renderReport(data, source) {
   showView('report');
 }
 
+// ── Angle overlay setting ─────────────────────────────────
+const ANGLE_OVERLAY_KEY = 'ms_show_angle_overlay';
+
+function getShowAngleOverlay() {
+  return localStorage.getItem(ANGLE_OVERLAY_KEY) === '1';
+}
+function setShowAngleOverlay(val) {
+  if (val) localStorage.setItem(ANGLE_OVERLAY_KEY, '1');
+  else localStorage.removeItem(ANGLE_OVERLAY_KEY);
+}
+
 // ── Profile ───────────────────────────────────────────────
 const PROFILE_KEY    = 'ms_profile';
 const ONBOARDING_KEY = 'ms_onboarding_done';
@@ -2980,6 +2992,16 @@ function loadSettings(activeTab = 'profile') {
       <!-- Advanced tab -->
       <div class="stab-panel${activeTab === 'advanced' ? ' active' : ''}" id="stab-advanced">
         <div class="settings-section">
+          <p class="settings-section-title">Recording</p>
+          <label class="settings-toggle-row">
+            <span class="settings-toggle-label">
+              <span>Angle overlay</span>
+              <span class="settings-toggle-desc">Show live joint angles on the camera feed during recording</span>
+            </span>
+            <input type="checkbox" id="s-angle-overlay" class="settings-toggle" ${getShowAngleOverlay() ? 'checked' : ''} />
+          </label>
+        </div>
+        <div class="settings-section">
           <p class="settings-section-title">Tutorial</p>
           <p class="settings-section-desc">Watch the getting started walkthrough again.</p>
           <button class="btn-ghost" id="s-replay-tutorial">
@@ -3054,6 +3076,11 @@ function loadSettings(activeTab = 'profile') {
   });
 
   // Advanced tab interactions
+  const angleOverlayToggle = document.getElementById('s-angle-overlay');
+  if (angleOverlayToggle) {
+    angleOverlayToggle.addEventListener('change', () => setShowAngleOverlay(angleOverlayToggle.checked));
+  }
+
   const replayBtn = document.getElementById('s-replay-tutorial');
   if (replayBtn) {
     replayBtn.addEventListener('click', () => {
