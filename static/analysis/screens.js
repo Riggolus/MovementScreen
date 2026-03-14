@@ -59,8 +59,18 @@ const FRONTAL_CAPTURE_FRACTION = 0.75;
  */
 export const FRONTAL_FULL_DEPTH_FRACTION = 0.90;
 
-/** Lead-knee angle below which a lunge is considered at-depth. */
+/** Lead-knee angle below which a split squat (lateral view) is at depth. */
 const LUNGE_DEPTH_THRESHOLD_DEGREES = 105.0;
+
+/**
+ * Hip-to-knee vertical proximity fraction for split squat anterior depth gate.
+ * From the front, the lead leg appears nearly vertical even at depth — the
+ * hip-knee-ankle angle stays close to 180° and never crosses the 105° threshold.
+ * Instead we use the same vertical ratio approach as the squat anterior gate:
+ * hipNorm / kneeNorm >= this value means the hip has dropped close to knee level.
+ * 0.85 ≈ lead hip at ~85 % of the way from shoulder to knee height = meaningful depth.
+ */
+const SPLIT_SQUAT_ANTERIOR_FRACTION = 0.85;
 
 // ---------------------------------------------------------------------------
 // Squat depth gate
@@ -140,11 +150,19 @@ export function acceptFrameSquat(landmarks, cameraAngle, lateralSide = 'left') {
 // ---------------------------------------------------------------------------
 
 /**
- * Determine whether a lunge frame is at depth.
- * Port of: LungeScreen.accept_frame() in lunge.py
+ * Determine whether a split-squat frame is at depth.
  *
- * Uses the lead-knee 2-D angle, which works from most camera angles because
- * lunge knee flexion is large enough to be visible in both frontal and lateral views.
+ * Two-path depth gate depending on camera angle:
+ *
+ * Lateral: lead-knee hip-knee-ankle angle < 105°.
+ *   If the lead ankle is off-screen (visibility < 0.5), falls back to the
+ *   vertical-ratio approach so depth is still detected.
+ *
+ * Anterior: hip-to-knee vertical proximity ratio on the lead leg.
+ *   From the front the lead leg appears nearly vertical even at full depth —
+ *   the 2D hip-knee-ankle angle stays ~180° and never crosses 105°.
+ *   The vertical ratio (hipNorm / kneeNorm) rises toward 1.0 as the hip
+ *   drops toward knee level, correctly signalling depth without the ankle.
  *
  * @param {Array}  landmarks   - MediaPipe 33-landmark array
  * @param {string} cameraAngle - 'anterior' | 'lateral'
@@ -156,15 +174,44 @@ export function acceptFrameLunge(landmarks, cameraAngle, leadSide) {
     ? [LM.LEFT_HIP,  LM.LEFT_KNEE,  LM.LEFT_ANKLE]
     : [LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE];
 
-  if (vis(landmarks, hipIdx) && vis(landmarks, kneeIdx) && vis(landmarks, ankleIdx)) {
-    const kneeAngle = angleBetween(
-      xy(landmarks, hipIdx),
-      xy(landmarks, kneeIdx),
-      xy(landmarks, ankleIdx),
-    );
-    return kneeAngle < LUNGE_DEPTH_THRESHOLD_DEGREES;
+  if (!vis(landmarks, hipIdx) || !vis(landmarks, kneeIdx)) return false;
+
+  // Lateral view: use knee angle if ankle is visible, fall back to vertical ratio
+  if (cameraAngle === 'lateral') {
+    if (vis(landmarks, ankleIdx)) {
+      const kneeAngle = angleBetween(
+        xy(landmarks, hipIdx),
+        xy(landmarks, kneeIdx),
+        xy(landmarks, ankleIdx),
+      );
+      return kneeAngle < LUNGE_DEPTH_THRESHOLD_DEGREES;
+    }
+    // Ankle off-screen — fall through to vertical ratio below
   }
-  return false;
+
+  // Anterior view (or lateral fallback when ankle not visible):
+  // Measure how far the lead hip has dropped toward the lead knee.
+  const shoulderYs = [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER]
+    .filter(i => vis(landmarks, i))
+    .map(i => landmarks[i].y);
+  const ankleYs = [LM.LEFT_ANKLE, LM.RIGHT_ANKLE]
+    .filter(i => vis(landmarks, i))
+    .map(i => landmarks[i].y);
+
+  if (shoulderYs.length === 0) return false;
+
+  const topY  = Math.min(...shoulderYs);
+  const botY  = ankleYs.length > 0
+    ? Math.max(...ankleYs)
+    : landmarks[hipIdx].y + (landmarks[hipIdx].y - topY); // estimated if both ankles off-screen
+  const bodyH = botY - topY;
+  if (bodyH < 0.01) return false;
+
+  const hipNorm  = (landmarks[hipIdx].y  - topY) / bodyH;
+  const kneeNorm = (landmarks[kneeIdx].y - topY) / bodyH;
+  if (kneeNorm <= 0) return false;
+
+  return (hipNorm / kneeNorm) >= SPLIT_SQUAT_ANTERIOR_FRACTION;
 }
 
 // ---------------------------------------------------------------------------
