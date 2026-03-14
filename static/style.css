@@ -667,6 +667,22 @@ body {
 .cband-tick-d { background: color-mix(in srgb, var(--grade-d) 60%, #000 40%); }
 
 /* Slider rows */
+/* Bidirectional band extras */
+.calib-band-bi { overflow: visible; }
+.cband-zero {
+  position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: var(--text-3); opacity: .35; border-radius: 1px; transform: translateX(-50%);
+}
+.calib-bi-dir-labels {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--text-3); margin-top: 5px; margin-bottom: 6px;
+  font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+}
+.calib-bi-section {
+  font-size: 10px; font-weight: 700; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .05em;
+  margin: 8px 0 4px; padding-top: 6px; border-top: 1px solid var(--border);
+}
 .calib-sliders { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .calib-slider-row { display: flex; align-items: center; gap: 7px; font-size: 12px; }
 .calib-slider-label {

@@ -1710,10 +1710,16 @@ const CALIBRATION_MAP = {
 // current saved thresholds. userMeans markers are added opportunistically from history.
 const DIRECT_CALIB_GROUPS = [
   // ── Frontal plane (anterior) ─────────────────────────────
-  { title: 'Knee Valgus',             unit: '',  lowerIsWorse: false, tests: ['squat','lunge'],              views: ['anterior'],
-    keys: ['knee_valgus_b',       'knee_valgus_c',       'knee_valgus_d'      ] },
-  { title: 'Knee Varus',              unit: '',  lowerIsWorse: false, tests: ['squat','lunge'],              views: ['anterior'],
-    keys: ['knee_varus_b',        'knee_varus_c',        'knee_varus_d'       ] },
+  { title: 'Knee Frontal Deviation',  unit: '',  bidirectional: true,
+    positiveLabel: 'Valgus', negativeLabel: 'Varus',
+    tests: ['squat','lunge'], views: ['anterior'],
+    positiveKeys: ['knee_valgus_b',    'knee_valgus_c',    'knee_valgus_d'   ],
+    negativeKeys: ['knee_varus_b',     'knee_varus_c',     'knee_varus_d'    ] },
+  { title: 'Foot Frontal Deviation',  unit: '',  bidirectional: true,
+    positiveLabel: 'Pronation', negativeLabel: 'Supination',
+    tests: ['squat','lunge'], views: ['anterior'],
+    positiveKeys: ['foot_pronation_b', 'foot_pronation_c', 'foot_pronation_d'],
+    negativeKeys: ['foot_supination_b','foot_supination_c','foot_supination_d'] },
   { title: 'Pelvic Tilt',             unit: '°', lowerIsWorse: false, tests: ['squat','lunge','overhead'],   views: ['anterior'],
     keys: ['pelvic_tilt_b',       'pelvic_tilt_c',       'pelvic_tilt_d'      ] },
   { title: 'Lateral Trunk Flexion',   unit: '°', lowerIsWorse: false, tests: ['squat','lunge','overhead'],   views: ['anterior'],
@@ -1799,41 +1805,94 @@ function renderThresholdSliders(container, userMeans = {}, activeFilter = 'all',
     html += `<p class="calib-empty">No thresholds for this filter.</p>`;
   } else {
     for (const g of visible) {
-      const [bKey, cKey, dKey] = g.keys;
-      const bVal = current[bKey], cVal = current[cKey], dVal = current[dKey];
-      if (bVal == null) continue;
-
       const userMean = userMeans[g.title] ?? null;
-      const isSmall  = Math.abs(bVal) < 1;
-      const step     = isSmall ? 0.001 : 0.5;
-      const { html: bandHtml, lo, hi } = renderCalibBand(g.lowerIsWorse, userMean, bVal, cVal, dVal);
 
-      html += `
-        <div class="calib-card">
-          <div class="calib-card-header">
-            <span class="calib-card-title">${g.title}</span>
-            ${userMean != null ? `<span class="calib-card-mean">Recorded avg: ${fmt(userMean, g.unit)}</span>` : ''}
-          </div>
-          ${bandHtml}
-          <div class="calib-sliders">
-            ${[{ key: bKey, th: 'b', label: 'Grade B' }, { key: cKey, th: 'c', label: 'Grade C' }, { key: dKey, th: 'd', label: 'Grade D' }].map(({ key, th, label }) => {
-              const v = current[key] ?? 0;
-              return `
-                <div class="calib-slider-row">
-                  <span class="calib-slider-label cband-label-${th}">${label}</span>
-                  <input class="calib-range" type="range"
-                    data-key="${key}" data-thresh="${th}"
-                    min="${lo}" max="${hi}" step="${step}" value="${v}"/>
-                  <input class="calib-input" type="number"
-                    data-key="${key}" data-thresh="${th}"
-                    step="${step}" value="${fmt(v, '')}"/>
-                  ${g.unit ? `<span class="calib-input-unit">${g.unit}</span>` : ''}
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      `;
+      if (g.bidirectional) {
+        // ── Bidirectional card (e.g. Varus ← | A | → Valgus) ──────────────
+        const [pbKey, pcKey, pdKey] = g.positiveKeys;
+        const [nbKey, ncKey, ndKey] = g.negativeKeys;
+        const posB = current[pbKey], posC = current[pcKey], posD = current[pdKey];
+        const negB = current[nbKey], negC = current[ncKey], negD = current[ndKey];
+        if (posB == null || negB == null) continue;
+
+        const { html: bandHtml, hi: hiPos, lo: loBand } = renderCalibBandBi(userMean, posB, posC, posD, negB, negC, negD);
+        const hiNeg = Math.abs(loBand);
+        const step  = 0.001;
+
+        const sliderRow = (key, th, label, max) => {
+          const v = current[key] ?? 0;
+          return `
+            <div class="calib-slider-row">
+              <span class="calib-slider-label cband-label-${th.split('-')[1]}">${label}</span>
+              <input class="calib-range" type="range"
+                data-key="${key}" data-thresh="${th}"
+                min="0" max="${max.toFixed(3)}" step="${step}" value="${v}"/>
+              <input class="calib-input" type="number"
+                data-key="${key}" data-thresh="${th}"
+                step="${step}" value="${v.toFixed(3)}"/>
+            </div>`;
+        };
+
+        html += `
+          <div class="calib-card" data-bidir="1">
+            <div class="calib-card-header">
+              <span class="calib-card-title">${g.title}</span>
+              ${userMean != null ? `<span class="calib-card-mean">Avg: ${fmt(userMean, g.unit)}</span>` : ''}
+            </div>
+            ${bandHtml}
+            <div class="calib-bi-dir-labels">
+              <span>← ${g.negativeLabel}</span>
+              <span>${g.positiveLabel} →</span>
+            </div>
+            <p class="calib-bi-section">← ${g.negativeLabel} thresholds</p>
+            <div class="calib-sliders">
+              ${sliderRow(nbKey, 'neg-b', 'Grade B', hiNeg)}
+              ${sliderRow(ncKey, 'neg-c', 'Grade C', hiNeg)}
+              ${sliderRow(ndKey, 'neg-d', 'Grade D', hiNeg)}
+            </div>
+            <p class="calib-bi-section">${g.positiveLabel} thresholds →</p>
+            <div class="calib-sliders">
+              ${sliderRow(pbKey, 'pos-b', 'Grade B', hiPos)}
+              ${sliderRow(pcKey, 'pos-c', 'Grade C', hiPos)}
+              ${sliderRow(pdKey, 'pos-d', 'Grade D', hiPos)}
+            </div>
+          </div>`;
+
+      } else {
+        // ── Standard unidirectional card ───────────────────────────────────
+        const [bKey, cKey, dKey] = g.keys;
+        const bVal = current[bKey], cVal = current[cKey], dVal = current[dKey];
+        if (bVal == null) continue;
+
+        const isSmall = Math.abs(bVal) < 1;
+        const step    = isSmall ? 0.001 : 0.5;
+        const { html: bandHtml, lo, hi } = renderCalibBand(g.lowerIsWorse, userMean, bVal, cVal, dVal);
+
+        html += `
+          <div class="calib-card">
+            <div class="calib-card-header">
+              <span class="calib-card-title">${g.title}</span>
+              ${userMean != null ? `<span class="calib-card-mean">Recorded avg: ${fmt(userMean, g.unit)}</span>` : ''}
+            </div>
+            ${bandHtml}
+            <div class="calib-sliders">
+              ${[{ key: bKey, th: 'b', label: 'Grade B' }, { key: cKey, th: 'c', label: 'Grade C' }, { key: dKey, th: 'd', label: 'Grade D' }].map(({ key, th, label }) => {
+                const v = current[key] ?? 0;
+                return `
+                  <div class="calib-slider-row">
+                    <span class="calib-slider-label cband-label-${th}">${label}</span>
+                    <input class="calib-range" type="range"
+                      data-key="${key}" data-thresh="${th}"
+                      min="${lo}" max="${hi}" step="${step}" value="${v}"/>
+                    <input class="calib-input" type="number"
+                      data-key="${key}" data-thresh="${th}"
+                      step="${step}" value="${fmt(v, '')}"/>
+                    ${g.unit ? `<span class="calib-input-unit">${g.unit}</span>` : ''}
+                  </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+      }
     }
   }
 
@@ -1856,15 +1915,16 @@ function renderThresholdSliders(container, userMeans = {}, activeFilter = 'all',
 
   // Wire sliders ↔ number inputs with live band refresh
   container.querySelectorAll('.calib-card').forEach(card => {
+    const refresh = card.dataset.bidir ? () => refreshBandBi(card) : () => refreshBand(card);
     card.querySelectorAll('.calib-range').forEach(rangeEl => {
-      const th = rangeEl.dataset.thresh;
+      const th    = rangeEl.dataset.thresh;
       const numEl = card.querySelector(`.calib-input[data-thresh="${th}"]`);
       const small = Math.abs(parseFloat(rangeEl.value)) < 1;
       rangeEl.addEventListener('input', () => {
         if (numEl) numEl.value = small ? parseFloat(rangeEl.value).toFixed(3) : parseFloat(rangeEl.value).toFixed(1);
-        refreshBand(card);
+        refresh();
       });
-      numEl?.addEventListener('input', () => { rangeEl.value = numEl.value; refreshBand(card); });
+      numEl?.addEventListener('input', () => { rangeEl.value = numEl.value; refresh(); });
     });
   });
 
@@ -1995,6 +2055,92 @@ function refreshBand(card) {
   for (const [k, val] of [['b', bVal], ['c', cVal], ['d', dVal]]) {
     const tick = band.querySelector(`[data-thresh-tick="${k}"]`);
     if (tick) tick.style.left = `${pct(val).toFixed(1)}%`;
+  }
+}
+
+/**
+ * Render a bidirectional grade-band (e.g. Varus ← | A | → Valgus).
+ * negB/C/D are threshold magnitudes for the negative side (stored positive).
+ * posB/C/D are thresholds for the positive side.
+ * Returns { html, lo, hi } where lo < 0 and hi > 0.
+ */
+function renderCalibBandBi(userMean, posB, posC, posD, negB, negC, negD) {
+  if (posB == null || negB == null) return { html: '', lo: -1, hi: 1 };
+  const hiPos = Math.max(posD * 1.5, posD + 0.02, userMean > 0 ? userMean * 1.3 : 0, 0.01);
+  const hiNeg = Math.max(negD * 1.5, negD + 0.02, userMean < 0 ? Math.abs(userMean) * 1.3 : 0, 0.01);
+  const lo = -hiNeg, hi = hiPos;
+  const range = hi - lo;
+  if (range <= 0) return { html: '', lo, hi };
+  const pct = v => Math.max(0, Math.min(100, ((v - lo) / range) * 100));
+
+  // 7 zones left-to-right: neg-d, neg-c, neg-b, a, pos-b, pos-c, pos-d
+  const zones = [
+    { z: 'neg-d', grade: 'd', f: lo,    t: -negD },
+    { z: 'neg-c', grade: 'c', f: -negD, t: -negC },
+    { z: 'neg-b', grade: 'b', f: -negC, t: -negB },
+    { z: 'a',     grade: 'a', f: -negB, t:  posB },
+    { z: 'pos-b', grade: 'b', f:  posB, t:  posC },
+    { z: 'pos-c', grade: 'c', f:  posC, t:  posD },
+    { z: 'pos-d', grade: 'd', f:  posD, t:  hi   },
+  ];
+  const zoneHtml = zones.map(({ z, grade, f, t }) => {
+    const l = pct(f), w = Math.max(0, pct(t) - l);
+    return `<div class="cband-zone cband-${grade}" data-zone="${z}" style="left:${l.toFixed(1)}%;width:${w.toFixed(1)}%"></div>`;
+  }).join('');
+
+  const tickHtml = [
+    ['neg-b', -negB], ['neg-c', -negC], ['neg-d', -negD],
+    ['pos-b',  posB], ['pos-c',  posC], ['pos-d',  posD],
+  ].map(([k, v]) =>
+    `<div class="cband-tick" data-thresh-tick="${k}" style="left:${pct(v).toFixed(1)}%"></div>`
+  ).join('');
+
+  const zeroHtml = `<div class="cband-zero" style="left:${pct(0).toFixed(1)}%"></div>`;
+  const markerHtml = userMean != null
+    ? `<div class="cband-marker" style="left:${pct(userMean).toFixed(1)}%"></div>`
+    : '';
+
+  const html = `<div class="calib-band calib-band-bi" aria-hidden="true"
+    data-lo="${lo}" data-hi="${hi}"
+    >${zoneHtml}${tickHtml}${zeroHtml}${markerHtml}</div>`;
+  return { html, lo, hi };
+}
+
+/** Update a bidirectional band in-place when slider values change. */
+function refreshBandBi(card) {
+  const band = card.querySelector('.calib-band-bi');
+  if (!band) return;
+  const lo    = parseFloat(band.dataset.lo);
+  const hi    = parseFloat(band.dataset.hi);
+  const range = hi - lo;
+  if (range <= 0) return;
+  const pct = v => Math.max(0, Math.min(100, ((v - lo) / range) * 100));
+  const get = th => parseFloat(card.querySelector(`.calib-input[data-thresh="${th}"]`)?.value ?? 'NaN');
+
+  const negB = get('neg-b'), negC = get('neg-c'), negD = get('neg-d');
+  const posB = get('pos-b'), posC = get('pos-c'), posD = get('pos-d');
+  if ([negB, negC, negD, posB, posC, posD].some(isNaN)) return;
+
+  const zones = [
+    { z: 'neg-d', f: lo,    t: -negD },
+    { z: 'neg-c', f: -negD, t: -negC },
+    { z: 'neg-b', f: -negC, t: -negB },
+    { z: 'a',     f: -negB, t:  posB },
+    { z: 'pos-b', f:  posB, t:  posC },
+    { z: 'pos-c', f:  posC, t:  posD },
+    { z: 'pos-d', f:  posD, t:  hi   },
+  ];
+  for (const { z, f, t } of zones) {
+    const el = band.querySelector(`[data-zone="${z}"]`);
+    if (!el) continue;
+    const l = pct(f), w = Math.max(0, pct(t) - l);
+    el.style.left  = `${l.toFixed(1)}%`;
+    el.style.width = `${w.toFixed(1)}%`;
+  }
+  for (const [k, v] of [['neg-b', -negB], ['neg-c', -negC], ['neg-d', -negD],
+                         ['pos-b',  posB], ['pos-c',  posC], ['pos-d',  posD]]) {
+    const tick = band.querySelector(`[data-thresh-tick="${k}"]`);
+    if (tick) tick.style.left = `${pct(v).toFixed(1)}%`;
   }
 }
 
