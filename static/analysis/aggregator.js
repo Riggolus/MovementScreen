@@ -306,8 +306,33 @@ export function createAggregator(screenName) {
           metricValue: 0,
           metricLabel: 'max depth ratio',
         });
-      } else if (cameraAngle !== 'lateral' && maxDepthRatio < FRONTAL_FULL_DEPTH_FRACTION) {
-        // Frames captured but depth was reduced — compensations are analysed but depth is flagged
+      } else if (cameraAngle === 'lateral') {
+        // Lateral depth check: grade by minimum knee angle reached.
+        // All captured frames are already below the 115° gate; we want to know
+        // how far below it they got. Optimal depth ≈ 90° (parallel) or lower.
+        const nearKneeKey = lateralSide === 'right' ? 'rightKneeFlexion' : 'leftKneeFlexion';
+        const kneeAngles = frames.map(f => f[nearKneeKey]).filter(v => v != null);
+        if (kneeAngles.length > 0) {
+          const minKnee = Math.min(...kneeAngles);
+          let sev = null;
+          if      (minKnee >= 108) sev = 'D'; // barely past gate — very shallow
+          else if (minKnee >= 100) sev = 'C'; // clearly partial squat
+          else if (minKnee >= 92)  sev = 'B'; // near-parallel but short of full depth
+          if (sev) {
+            rawFindings.push({
+              name: 'Reduced Squat Depth',
+              severity: sev,
+              description:
+                `Deepest knee angle reached: ${Math.round(minKnee)}°. ` +
+                'Aim for ≤ 90° (thighs parallel or below) for a complete assessment. ' +
+                'Limited depth may indicate ankle dorsiflexion restriction or hip mobility limitation.',
+              metricValue: Math.round(minKnee),
+              metricLabel: 'min knee angle (deg)',
+            });
+          }
+        }
+      } else if (maxDepthRatio < FRONTAL_FULL_DEPTH_FRACTION) {
+        // Frontal: frames captured but depth was reduced
         rawFindings.push({
           name: 'Reduced Squat Depth',
           severity: 'C',
