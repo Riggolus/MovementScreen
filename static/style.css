@@ -371,15 +371,21 @@ body {
 .finding-what   { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 8px; }
 .finding-tips   { margin: 0; padding-left: 18px; }
 .finding-tips li { font-size: 13px; color: var(--text-2); line-height: 1.6; margin-bottom: 3px; }
+.side-asym-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; color: #b45309;
+  background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3);
+  border-radius: 4px; padding: 2px 7px; margin-bottom: 8px;
+}
 .no-findings {
   background: linear-gradient(135deg, rgba(16,185,129,.08) 0%, rgba(16,185,129,.04) 100%);
   border: 1px solid rgba(16,185,129,.25); border-radius: var(--r); padding: 28px 20px; text-align: center;
 }
 .no-findings-icon { display: block; font-size: 40px; margin-bottom: 10px; color: var(--none); }
 .no-findings p { font-size: 15px; color: var(--text-2); font-weight: 500; }
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
-.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; box-shadow: var(--shadow-sm); }
-.stat-name   { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 10px; line-height: 1.3; }
+.stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; box-shadow: var(--shadow-sm); min-width: 0; }
+.stat-name   { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 10px; line-height: 1.3; overflow-wrap: break-word; }
 .stat-values { display: flex; justify-content: space-between; align-items: flex-end; }
 .stat-item   { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .stat-label  { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .4px; color: var(--text-3); }
@@ -819,9 +825,6 @@ body {
   .screen-btn, .angle-btn { padding: 12px 6px; }
   .screen-icon, .angle-icon { width: 36px; height: 36px; }
   .screen-label, .angle-label { font-size: 12px; }
-
-  /* Stats: 2 columns max */
-  .stats-grid { grid-template-columns: repeat(2, 1fr); }
 
   /* Threshold rows: stack controls below label */
   .threshold-row { flex-direction: column; align-items: flex-start; gap: 8px; }
