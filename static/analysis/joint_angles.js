@@ -294,11 +294,14 @@ export function computeJointAngles(landmarks) {
   // Measures how far the knee deviates medially from the hip-ankle alignment line.
   // Positive = medial collapse (valgus); negative = lateral bow (varus).
   // Normalised by hip width so the metric is body-size independent.
+  // Minimum hip width of 0.06 (6 % of image width) ensures the person is large enough
+  // in the frame for reliable frontal-plane tracking — smaller values cause the
+  // normalisation to amplify landmark noise into unrealistically large deviations.
   if (bilateralVisible(landmarks, LM.LEFT_HIP, LM.RIGHT_HIP)) {
     const hipWidth = Math.abs(
       landmarks[LM.LEFT_HIP].x - landmarks[LM.RIGHT_HIP].x,
     );
-    if (hipWidth > 0.01) {
+    if (hipWidth > 0.06) {
       const sides = [
         { side: 'left',  hipIdx: LM.LEFT_HIP,  kneeIdx: LM.LEFT_KNEE,  ankleIdx: LM.LEFT_ANKLE  },
         { side: 'right', hipIdx: LM.RIGHT_HIP, kneeIdx: LM.RIGHT_KNEE, ankleIdx: LM.RIGHT_ANKLE },
@@ -342,7 +345,7 @@ export function computeJointAngles(landmarks) {
     const hipWidthFoot = Math.abs(
       landmarks[LM.LEFT_HIP].x - landmarks[LM.RIGHT_HIP].x,
     );
-    if (hipWidthFoot > 0.01) {
+    if (hipWidthFoot > 0.06) {
       for (const { side, ankleIdx, heelIdx } of [
         { side: 'left',  ankleIdx: LM.LEFT_ANKLE,  heelIdx: LM.LEFT_HEEL  },
         { side: 'right', ankleIdx: LM.RIGHT_ANKLE, heelIdx: LM.RIGHT_HEEL },
