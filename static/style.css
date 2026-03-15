@@ -372,6 +372,46 @@ body {
 .finding-what   { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 8px; }
 .finding-tips   { margin: 0; padding-left: 18px; }
 .finding-tips li { font-size: 13px; color: var(--text-2); line-height: 1.6; margin-bottom: 3px; }
+
+/* Dispute button */
+.finding-footer {
+  display: flex; justify-content: flex-end; margin-top: 10px; padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.dispute-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; color: var(--text-3);
+  background: none; border: 1.5px solid var(--border); border-radius: var(--r-sm);
+  padding: 4px 10px; cursor: pointer; font-family: inherit; transition: all .15s;
+  letter-spacing: .02em;
+}
+.dispute-btn:hover { border-color: var(--text-3); color: var(--text-2); }
+.dispute-btn.is-disputed {
+  background: var(--surface-2); border-color: var(--grade-b);
+  color: var(--grade-b);
+}
+/* Disputed finding card state */
+.finding-card.is-disputed { opacity: 0.6; }
+.finding-card.is-disputed .finding-name { text-decoration: line-through; }
+
+/* Adaptive suggestion banner */
+.adaptive-banner {
+  background: linear-gradient(135deg, rgba(99,102,241,.08), rgba(99,102,241,.04));
+  border: 1.5px solid rgba(99,102,241,.25); border-radius: var(--r);
+  padding: 14px 16px; margin: 12px 0;
+}
+.adaptive-banner-inner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.adaptive-banner-inner > svg { flex-shrink: 0; color: var(--primary); }
+.adaptive-banner-text { flex: 1; font-size: 13px; color: var(--text-2); line-height: 1.4; }
+.adaptive-recalib-btn {
+  font-size: 12px; padding: 6px 12px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--primary); color: var(--primary);
+  background: none; font-weight: 600; cursor: pointer; white-space: nowrap;
+  font-family: inherit; transition: all .15s;
+}
+.adaptive-recalib-btn:hover { background: var(--primary); color: #fff; }
 .side-asym-badge {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 11px; font-weight: 600; color: #b45309;

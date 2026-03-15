@@ -1035,7 +1035,7 @@ function renderResults(data) {
         : '';
 
       html += `
-        <div class="finding-card" style="--border-color:${c}">
+        <div class="finding-card${isDisputed(f.name, data.recorded_at) ? ' is-disputed' : ''}" style="--border-color:${c}">
           <div class="finding-header">
             <span class="severity-badge" style="background:${c}">${SEV_LABEL[f.severity]}</span>
             <span class="finding-name">${f.name}</span>
@@ -1045,9 +1045,14 @@ function renderResults(data) {
           ${asymHtml}
           ${whatHtml}
           ${tipsHtml}
+          <div class="finding-footer">
+            ${disputeBtnHtml(f.name, f.metric_value, data.recorded_at)}
+          </div>
         </div>
       `;
     }
+    const suggestion = getAdaptiveSuggestion(data.findings.map(f => f.name));
+    html += adaptiveBannerHtml(suggestion);
   }
 
   // ── Biomechanical Measurements (collapsible) ──────────────
@@ -1110,6 +1115,30 @@ function renderResults(data) {
   views.results.innerHTML = html;
   views.results.scrollTop = 0;
   paintFindingSnapshots(data.snapshot);
+  wireDisputeButtons(views.results, data.findings.map(f => f.name), () => {
+    // Refresh adaptive banner
+    const banner = document.getElementById('adaptive-banner');
+    const sug = getAdaptiveSuggestion(data.findings.map(f => f.name));
+    if (banner) {
+      if (sug) {
+        banner.querySelector('.adaptive-banner-text').innerHTML =
+          `<strong>${sug.baseType}</strong> has been disputed ${sug.count} time${sug.count !== 1 ? 's' : ''} — this threshold may be too sensitive for you.`;
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+    } else if (sug) {
+      // Insert banner if one became visible due to this dispute
+      const actionsDiv = views.results.querySelector('.results-actions');
+      if (actionsDiv) {
+        const el = document.createElement('div');
+        el.innerHTML = adaptiveBannerHtml(sug);
+        actionsDiv.before(el.firstElementChild);
+        wireAdaptiveBtn(views.results);
+      }
+    }
+  });
+  wireAdaptiveBtn(views.results);
   document.getElementById('again-btn').addEventListener('click', resetApp);
   document.getElementById('report-from-results-btn').addEventListener('click', () => renderReport(data, 'results'));
   document.getElementById('history-from-results-btn').addEventListener('click', loadHistory);
@@ -1386,13 +1415,16 @@ async function toggleAssessmentDetail(id) {
       for (const f of displayData.findings) {
         const c = SEV_COLOR[f.severity];
         inner += `
-          <div class="finding-card" style="--border-color:${c}">
+          <div class="finding-card${isDisputed(f.name, data.recorded_at) ? ' is-disputed' : ''}" style="--border-color:${c}">
             <div class="finding-header">
               <span class="severity-badge" style="background:${c}">${SEV_LABEL[f.severity]}</span>
               <span class="finding-name">${f.name}</span>
             </div>
             <p class="finding-desc">${f.description}</p>
             ${f.metric_value != null ? `<p class="finding-metric">${f.metric_label}: <strong>${f.metric_value}</strong></p>` : ''}
+            <div class="finding-footer">
+              ${disputeBtnHtml(f.name, f.metric_value, data.recorded_at)}
+            </div>
           </div>
         `;
       }
@@ -1406,6 +1438,8 @@ async function toggleAssessmentDetail(id) {
       </div>
     `;
     body.innerHTML = inner;
+    wireDisputeButtons(body, displayData.findings.map(f => f.name), null);
+    wireAdaptiveBtn(body);
     body.querySelector('.report-btn-history').addEventListener('click', () => renderReport(data, 'history'));
   } catch {
     body.innerHTML = `<p style="padding:16px;color:var(--severe);font-size:13px">Failed to load details.</p>`;
@@ -2799,6 +2833,117 @@ function initDisabledFindings() {
   if (localStorage.getItem(DISABLED_FINDINGS_KEY) === null) {
     saveDisabledFindings(new Set(['foot_pronation', 'foot_supination']));
   }
+}
+
+// ── Dispute tracking ──────────────────────────────────────
+const DISPUTES_KEY = 'ms_disputes';
+const DISPUTE_SUGGEST_COUNT = 3; // show adaptive suggestion after N disputes of same type
+
+/** Strip Left/Right prefix and trailing parenthetical to get groupable base type */
+function findingBaseType(name) {
+  return name
+    .replace(/^(Left|Right) /, '')
+    .replace(/\s*\([^)]*\)$/, '')
+    .trim();
+}
+
+function getDisputes() {
+  try { return JSON.parse(localStorage.getItem(DISPUTES_KEY) || '[]'); } catch { return []; }
+}
+function saveDisputes(arr) {
+  try { localStorage.setItem(DISPUTES_KEY, JSON.stringify(arr)); } catch {}
+}
+function isDisputed(findingName, recordedAt) {
+  return getDisputes().some(d => d.findingName === findingName && d.recordedAt === recordedAt);
+}
+function addDispute(findingName, metricValue, recordedAt) {
+  const arr = getDisputes();
+  if (arr.some(d => d.findingName === findingName && d.recordedAt === recordedAt)) return;
+  arr.push({ findingName, baseType: findingBaseType(findingName), metricValue, recordedAt });
+  saveDisputes(arr);
+}
+function removeDispute(findingName, recordedAt) {
+  saveDisputes(getDisputes().filter(d => !(d.findingName === findingName && d.recordedAt === recordedAt)));
+}
+function getDisputesByBase(baseType) {
+  return getDisputes().filter(d => d.baseType === baseType);
+}
+
+/** Returns { baseType, count, disputes } for the type with most disputes if >= DISPUTE_SUGGEST_COUNT, else null */
+function getAdaptiveSuggestion(findingNames) {
+  // Only suggest for finding types present in the current result
+  const presentBases = new Set(findingNames.map(findingBaseType));
+  let best = null;
+  for (const base of presentBases) {
+    const disputes = getDisputesByBase(base);
+    if (disputes.length >= DISPUTE_SUGGEST_COUNT) {
+      if (!best || disputes.length > best.count) {
+        best = { baseType: base, count: disputes.length, disputes };
+      }
+    }
+  }
+  return best;
+}
+
+function disputeBtnHtml(findingName, metricValue, recordedAt) {
+  if (!recordedAt) return '';
+  const disputed = isDisputed(findingName, recordedAt);
+  const escapedName = findingName.replace(/"/g, '&quot;');
+  return `<button class="dispute-btn${disputed ? ' is-disputed' : ''}"
+    data-finding-name="${escapedName}"
+    data-metric-value="${metricValue ?? ''}"
+    data-recorded-at="${recordedAt}"
+    title="${disputed ? 'Undo dispute' : 'Flag this finding as incorrect'}">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+    ${disputed ? 'Disputed' : 'Dispute'}
+  </button>`;
+}
+
+function adaptiveBannerHtml(suggestion) {
+  if (!suggestion) return '';
+  return `
+    <div class="adaptive-banner" id="adaptive-banner">
+      <div class="adaptive-banner-inner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        <div class="adaptive-banner-text">
+          <strong>${suggestion.baseType}</strong> has been disputed ${suggestion.count} time${suggestion.count !== 1 ? 's' : ''} — this threshold may be too sensitive for you.
+        </div>
+        <button class="adaptive-recalib-btn btn-ghost" data-base-type="${suggestion.baseType}">Recalibrate</button>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Wire dispute button clicks on .dispute-btn elements within `container`.
+ * After each dispute change, re-checks for adaptive suggestions and
+ * updates the adaptive banner if present.
+ */
+function wireDisputeButtons(container, findingNames, onDisputeChange) {
+  container.querySelectorAll('.dispute-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { findingName, metricValue, recordedAt } = btn.dataset;
+      const disputed = isDisputed(findingName, recordedAt);
+      if (disputed) {
+        removeDispute(findingName, recordedAt);
+        btn.classList.remove('is-disputed');
+        btn.innerHTML = btn.innerHTML.replace('Disputed', 'Dispute');
+        btn.title = 'Flag this finding as incorrect';
+      } else {
+        addDispute(findingName, metricValue ? parseFloat(metricValue) : null, recordedAt);
+        btn.classList.add('is-disputed');
+        btn.innerHTML = btn.innerHTML.replace('Dispute', 'Disputed');
+        btn.title = 'Undo dispute';
+      }
+      if (onDisputeChange) onDisputeChange();
+    });
+  });
+}
+
+function wireAdaptiveBtn(container) {
+  container.querySelectorAll('.adaptive-recalib-btn').forEach(btn => {
+    btn.addEventListener('click', () => loadSettings('advanced'));
+  });
 }
 
 /** Filter a result object's findings by the current disabled set, recomputing worstSeverity. */
