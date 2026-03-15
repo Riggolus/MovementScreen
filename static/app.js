@@ -72,6 +72,10 @@ const MIN_FRAMES_BEFORE_AUTOSTOP = 60;
 
 let aggregator     = null;
 let timerInterval  = null;
+
+// ── Depth snapshot (best-depth frame for findings illustration) ────────────
+let bestDepthSnapshot     = null;  // { dataUrl, lms }
+let bestDepthRatioSeen    = 0;
 let secondsElapsed = 0;
 
 // ── 3D capture state ──────────────────────────────────────
@@ -158,7 +162,7 @@ const SCREEN_INSTRUCTIONS = {
       'Lower until thighs are parallel (or as deep as comfortable)',
       'Perform 3–5 slow, controlled reps',
     ],
-    camera: 'Anterior view: best for knee valgus and trunk shift. Lateral view: best for ankle mobility and trunk lean.',
+    camera: 'Set the camera at hip height (~90–100 cm). Anterior view: best for knee valgus and trunk shift. Lateral view: best for ankle mobility and trunk lean.',
   },
   lunge: {
     title: 'Split Squat',
@@ -171,19 +175,19 @@ const SCREEN_INSTRUCTIONS = {
       'Keep your torso upright — avoid leaning forward',
       'Push back to start and perform 3–5 controlled reps',
     ],
-    camera: 'Stand 1.5–2 m from the phone so your full body stays in frame at the bottom of the movement. Anterior view: best for knee tracking and trunk shift. Lateral view: best for ankle mobility and trunk lean.',
+    camera: 'Set the camera at hip height (~90–100 cm). Stand 1.5–2 m away so your full body stays in frame at the bottom. Anterior view: best for knee tracking and trunk shift. Lateral view: best for ankle mobility and trunk lean.',
   },
   overhead: {
     title: 'Overhead Reach',
-    desc: 'Stand tall and raise both arms directly overhead as high as possible. Keep your core braced and avoid arching your lower back. Lower with control and repeat.',
+    desc: 'Stand tall and raise both arms directly overhead as high as possible. Keep your core braced and avoid arching your lower back or flaring your ribs. Lower with control and repeat.',
     cues: [
-      'Stand with feet hip-width apart',
-      'Raise both arms simultaneously, reaching as high as possible',
+      'Stand with feet hip-width apart, arms at your sides',
+      'Raise both arms simultaneously — reach as high as possible',
       'Keep your lower back neutral — do not arch or flare your ribs',
-      'Aim to get arms fully vertical beside your ears',
+      'Aim to get arms fully vertical, inline with your ears',
       'Perform 3–5 slow, controlled reps',
     ],
-    camera: 'Anterior view: captures shoulder asymmetry. Lateral view: captures trunk extension compensation.',
+    camera: 'Set the camera at chest height (~120 cm) so your raised arms stay fully in frame. Anterior view: captures shoulder asymmetry. Lateral view: captures trunk extension and rib flare.',
   },
   gait: {
     title: 'Gait Analysis',
@@ -405,6 +409,8 @@ function beginRecording() {
   phase3DFrames = 0;
   debugCapturedFrames = 0;
   debugDepthFrames = 0;
+  bestDepthSnapshot  = null;
+  bestDepthRatioSeen = 0;
   document.getElementById('position-overlay').classList.add('hidden');
   nextAngleBtn.classList.add('hidden'); // hidden until minimum frames collected
   if (getShowAngleOverlay()) debugOverlay.classList.remove('hidden');
@@ -508,6 +514,166 @@ function updateDebugOverlay(angles, depthRatio, atDepth, capturedFrames, depthFr
     row('pelvic tilt', fmtDeg(angles.pelvicTiltDegrees));
 }
 
+// ── Depth snapshot capture ─────────────────────────────────────────────────
+const SNAP_W = 360;
+
+/**
+ * Composite the current video frame onto a small canvas and return
+ * { dataUrl, lms } for use as a finding illustration.
+ * lms: array of {x,y} normalised coords (0–1) matching the 33 landmarks.
+ */
+function captureDepthSnapshot(lms) {
+  try {
+    if (!preview.videoWidth) return null;
+    const ratio  = preview.videoHeight / preview.videoWidth;
+    const snapH  = Math.round(SNAP_W * ratio);
+    const c      = document.createElement('canvas');
+    c.width = SNAP_W; c.height = snapH;
+    const ctx    = c.getContext('2d');
+    // Mirror if needed (match displayed orientation)
+    if (mirrored) { ctx.translate(SNAP_W, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(preview, 0, 0, SNAP_W, snapH);
+    if (mirrored) ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return { dataUrl: c.toDataURL('image/jpeg', 0.72), lms: lms.map(l => ({ x: l.x, y: l.y })) };
+  } catch { return null; }
+}
+
+// ── Finding → landmark index map ───────────────────────────────────────────
+// Maps substring of a finding name to the LM indices that should be highlighted.
+// Checked in order; first match wins.
+const FINDING_LM_MAP = [
+  { match: 'Left Knee',             indices: [LM.LEFT_KNEE] },
+  { match: 'Right Knee',            indices: [LM.RIGHT_KNEE] },
+  { match: 'Left Foot',             indices: [LM.LEFT_ANKLE, LM.LEFT_HEEL] },
+  { match: 'Right Foot',            indices: [LM.RIGHT_ANKLE, LM.RIGHT_HEEL] },
+  { match: 'Left Heel',             indices: [LM.LEFT_HEEL, LM.LEFT_ANKLE] },
+  { match: 'Right Heel',            indices: [LM.RIGHT_HEEL, LM.RIGHT_ANKLE] },
+  { match: 'Left Restricted',       indices: [LM.LEFT_ANKLE] },
+  { match: 'Right Restricted',      indices: [LM.RIGHT_ANKLE] },
+  { match: 'Pelvic Tilt',           indices: [LM.LEFT_HIP, LM.RIGHT_HIP] },
+  { match: 'Hip Lateral Shift',     indices: [LM.LEFT_HIP, LM.RIGHT_HIP] },
+  { match: 'Shoulder Tilt',         indices: [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER] },
+  { match: 'Lateral Trunk Flexion', indices: [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER, LM.LEFT_HIP, LM.RIGHT_HIP] },
+  { match: 'Trunk Lean',            indices: [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER] },
+  { match: 'Head Forward',          indices: [LM.LEFT_EAR, LM.RIGHT_EAR] },
+  { match: 'Upper Trunk',           indices: [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER] },
+  { match: 'Spinal',                indices: [LM.LEFT_HIP, LM.RIGHT_HIP, LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER] },
+  { match: 'Left Shoulder',         indices: [LM.LEFT_SHOULDER, LM.LEFT_ELBOW] },
+  { match: 'Right Shoulder',        indices: [LM.RIGHT_SHOULDER, LM.RIGHT_ELBOW] },
+];
+
+function getFindingLmIndices(findingName) {
+  for (const { match, indices } of FINDING_LM_MAP) {
+    if (findingName.includes(match)) return indices;
+  }
+  return null;
+}
+
+/**
+ * After renderResults() sets innerHTML, call this to draw annotated thumbnails
+ * on all .finding-snap canvas elements.
+ */
+function paintFindingSnapshots(snapshot) {
+  if (!snapshot) return;
+  const canvases = views.results.querySelectorAll('.finding-snap');
+  if (!canvases.length) return;
+
+  const img = new Image();
+  img.onload = () => {
+    for (const canvas of canvases) {
+      const indicesRaw = canvas.dataset.lmIndices;
+      if (!indicesRaw) continue;
+      const indices = indicesRaw.split(',').map(Number);
+
+      // Compute bounding box of target landmarks (normalised)
+      const points = indices
+        .filter(i => i < snapshot.lms.length)
+        .map(i => snapshot.lms[i]);
+      if (!points.length) continue;
+
+      const xs   = points.map(p => p.x);
+      const ys   = points.map(p => p.y);
+      let cx = xs.reduce((a, b) => a + b) / xs.length;
+      let cy = ys.reduce((a, b) => a + b) / ys.length;
+
+      // Zoom: show a region that's 40% of image height centred on the target
+      const zoom     = 0.40;
+      const iw       = img.naturalWidth;
+      const ih       = img.naturalHeight;
+      const cropH    = ih * zoom;
+      const cropW    = cropH; // square crop
+      let srcX = cx * iw - cropW / 2;
+      let srcY = cy * ih - cropH / 2;
+      // Clamp to image bounds
+      srcX = Math.max(0, Math.min(iw - cropW, srcX));
+      srcY = Math.max(0, Math.min(ih - cropH, srcY));
+
+      const cw = canvas.width;
+      const ch = canvas.height;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, cw, ch);
+
+      // Draw cropped image
+      ctx.drawImage(img, srcX, srcY, cropW, cropH, 0, 0, cw, ch);
+
+      // Scale landmark coords to canvas space
+      const scaleX = cw / cropW;
+      const scaleY = ch / cropH;
+
+      // Draw glowing highlight circles for each landmark
+      const sevColor = canvas.dataset.sevColor || '#f59e0b';
+      for (const i of indices) {
+        if (i >= snapshot.lms.length) continue;
+        const lm = snapshot.lms[i];
+        const px = (lm.x * iw - srcX) * scaleX;
+        const py = (lm.y * ih - srcY) * scaleY;
+        const r  = cw * 0.15; // circle radius ~15% of canvas width
+
+        // Outer glow
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.strokeStyle = sevColor;
+        ctx.lineWidth   = 3;
+        ctx.globalAlpha = 0.35;
+        ctx.stroke();
+
+        // Inner solid ring
+        ctx.beginPath();
+        ctx.arc(px, py, r * 0.65, 0, Math.PI * 2);
+        ctx.strokeStyle = sevColor;
+        ctx.lineWidth   = 2.5;
+        ctx.globalAlpha = 0.90;
+        ctx.stroke();
+
+        ctx.globalAlpha = 1;
+      }
+
+      // Subtle rounded-rect vignette border
+      ctx.strokeStyle = sevColor;
+      ctx.lineWidth   = 3;
+      ctx.globalAlpha = 0.5;
+      roundRect(ctx, 1.5, 1.5, cw - 3, ch - 3, 8);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  };
+  img.src = snapshot.dataUrl;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
 // ── Skeleton loop ─────────────────────────────────────────
 function startSkeletonLoop() {
   let lastTs = -1;
@@ -579,7 +745,14 @@ function startSkeletonLoop() {
               } else if (currentScreen === 'lunge')    atDepth = acceptFrameLunge(lms, currentAngle, currentSide);
               else if (currentScreen === 'overhead') atDepth = acceptFrameOverhead(lms);
               const angles = computeJointAngles(lms);
-              if (atDepth) { aggregator.addFrame(angles, depthRatio); phase3DFrames++; debugCapturedFrames++; if (depthRatio >= 0.88) debugDepthFrames++; }
+              if (atDepth) {
+                aggregator.addFrame(angles, depthRatio); phase3DFrames++; debugCapturedFrames++; if (depthRatio >= 0.88) debugDepthFrames++;
+                // Capture snapshot at the deepest frame seen so far
+                if (depthRatio > bestDepthRatioSeen + 0.02) {
+                  bestDepthRatioSeen = depthRatio;
+                  bestDepthSnapshot  = captureDepthSnapshot(lms);
+                }
+              }
               if (recordingFrameCount % 4 === 0) updateDebugOverlay(angles, depthRatio, atDepth, debugCapturedFrames, debugDepthFrames);
             }
 
@@ -722,12 +895,16 @@ async function analyseLocally() {
       if (result.frame_count < 5) result.depth_warning = true;
     }
 
+    // Attach depth snapshot for results illustration (not persisted)
+    result.snapshot = bestDepthSnapshot;
+
     const record = {
       ...result,
       lead_side:   currentScreen === 'lunge' ? currentSide : null,
       recorded_at: new Date().toISOString(),
       synced:      false,
       server_id:   null,
+      snapshot:    undefined, // exclude from IndexedDB record
     };
 
     const localId = await saveAssessment(record);
@@ -850,19 +1027,32 @@ function renderResults(data) {
         }
       }
 
+      const lmIndices = data.snapshot ? getFindingLmIndices(f.name) : null;
+      const snapHtml  = lmIndices
+        ? `<canvas class="finding-snap" width="110" height="110"
+             data-lm-indices="${lmIndices.join(',')}"
+             data-sev-color="${c}"></canvas>`
+        : '';
+
       html += `
-        <div class="finding-card" style="--border-color:${c}">
+        <div class="finding-card${isDisputed(f.name, data.recorded_at) ? ' is-disputed' : ''}" style="--border-color:${c}">
           <div class="finding-header">
             <span class="severity-badge" style="background:${c}">${SEV_LABEL[f.severity]}</span>
             <span class="finding-name">${f.name}</span>
+            ${snapHtml}
           </div>
           <p class="finding-desc">${f.description}</p>
           ${asymHtml}
           ${whatHtml}
           ${tipsHtml}
+          <div class="finding-footer">
+            ${disputeBtnHtml(f.name, f.metric_value, data.recorded_at)}
+          </div>
         </div>
       `;
     }
+    const suggestion = getAdaptiveSuggestion(data.findings.map(f => f.name));
+    html += adaptiveBannerHtml(suggestion);
   }
 
   // ── Biomechanical Measurements (collapsible) ──────────────
@@ -924,6 +1114,31 @@ function renderResults(data) {
 
   views.results.innerHTML = html;
   views.results.scrollTop = 0;
+  paintFindingSnapshots(data.snapshot);
+  wireDisputeButtons(views.results, data.findings.map(f => f.name), () => {
+    // Refresh adaptive banner
+    const banner = document.getElementById('adaptive-banner');
+    const sug = getAdaptiveSuggestion(data.findings.map(f => f.name));
+    if (banner) {
+      if (sug) {
+        banner.querySelector('.adaptive-banner-text').innerHTML =
+          `<strong>${sug.baseType}</strong> has been disputed ${sug.count} time${sug.count !== 1 ? 's' : ''} — this threshold may be too sensitive for you.`;
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+    } else if (sug) {
+      // Insert banner if one became visible due to this dispute
+      const actionsDiv = views.results.querySelector('.results-actions');
+      if (actionsDiv) {
+        const el = document.createElement('div');
+        el.innerHTML = adaptiveBannerHtml(sug);
+        actionsDiv.before(el.firstElementChild);
+        wireAdaptiveBtn(views.results);
+      }
+    }
+  });
+  wireAdaptiveBtn(views.results);
   document.getElementById('again-btn').addEventListener('click', resetApp);
   document.getElementById('report-from-results-btn').addEventListener('click', () => renderReport(data, 'results'));
   document.getElementById('history-from-results-btn').addEventListener('click', loadHistory);
@@ -1200,13 +1415,16 @@ async function toggleAssessmentDetail(id) {
       for (const f of displayData.findings) {
         const c = SEV_COLOR[f.severity];
         inner += `
-          <div class="finding-card" style="--border-color:${c}">
+          <div class="finding-card${isDisputed(f.name, data.recorded_at) ? ' is-disputed' : ''}" style="--border-color:${c}">
             <div class="finding-header">
               <span class="severity-badge" style="background:${c}">${SEV_LABEL[f.severity]}</span>
               <span class="finding-name">${f.name}</span>
             </div>
             <p class="finding-desc">${f.description}</p>
             ${f.metric_value != null ? `<p class="finding-metric">${f.metric_label}: <strong>${f.metric_value}</strong></p>` : ''}
+            <div class="finding-footer">
+              ${disputeBtnHtml(f.name, f.metric_value, data.recorded_at)}
+            </div>
           </div>
         `;
       }
@@ -1220,6 +1438,8 @@ async function toggleAssessmentDetail(id) {
       </div>
     `;
     body.innerHTML = inner;
+    wireDisputeButtons(body, displayData.findings.map(f => f.name), null);
+    wireAdaptiveBtn(body);
     body.querySelector('.report-btn-history').addEventListener('click', () => renderReport(data, 'history'));
   } catch {
     body.innerHTML = `<p style="padding:16px;color:var(--severe);font-size:13px">Failed to load details.</p>`;
@@ -2613,6 +2833,177 @@ function initDisabledFindings() {
   if (localStorage.getItem(DISABLED_FINDINGS_KEY) === null) {
     saveDisabledFindings(new Set(['foot_pronation', 'foot_supination']));
   }
+}
+
+// ── Dispute tracking ──────────────────────────────────────
+const DISPUTES_KEY = 'ms_disputes';
+const DISPUTE_SUGGEST_COUNT = 3; // show adaptive suggestion after N disputes of same type
+
+/** Strip Left/Right prefix and trailing parenthetical to get groupable base type */
+function findingBaseType(name) {
+  return name
+    .replace(/^(Left|Right) /, '')
+    .replace(/\s*\([^)]*\)$/, '')
+    .trim();
+}
+
+function getDisputes() {
+  try { return JSON.parse(localStorage.getItem(DISPUTES_KEY) || '[]'); } catch { return []; }
+}
+function saveDisputes(arr) {
+  try { localStorage.setItem(DISPUTES_KEY, JSON.stringify(arr)); } catch {}
+}
+function isDisputed(findingName, recordedAt) {
+  return getDisputes().some(d => d.findingName === findingName && d.recordedAt === recordedAt);
+}
+function addDispute(findingName, metricValue, recordedAt) {
+  const arr = getDisputes();
+  if (arr.some(d => d.findingName === findingName && d.recordedAt === recordedAt)) return;
+  arr.push({ findingName, baseType: findingBaseType(findingName), metricValue, recordedAt });
+  saveDisputes(arr);
+}
+function removeDispute(findingName, recordedAt) {
+  saveDisputes(getDisputes().filter(d => !(d.findingName === findingName && d.recordedAt === recordedAt)));
+}
+function getDisputesByBase(baseType) {
+  return getDisputes().filter(d => d.baseType === baseType);
+}
+
+/** Returns { baseType, count, disputes } for the type with most disputes if >= DISPUTE_SUGGEST_COUNT, else null */
+function getAdaptiveSuggestion(findingNames) {
+  // Only suggest for finding types present in the current result
+  const presentBases = new Set(findingNames.map(findingBaseType));
+  let best = null;
+  for (const base of presentBases) {
+    const disputes = getDisputesByBase(base);
+    if (disputes.length >= DISPUTE_SUGGEST_COUNT) {
+      if (!best || disputes.length > best.count) {
+        best = { baseType: base, count: disputes.length, disputes };
+      }
+    }
+  }
+  return best;
+}
+
+function disputeBtnHtml(findingName, metricValue, recordedAt) {
+  if (!recordedAt) return '';
+  const disputed = isDisputed(findingName, recordedAt);
+  const escapedName = findingName.replace(/"/g, '&quot;');
+  return `<button class="dispute-btn${disputed ? ' is-disputed' : ''}"
+    data-finding-name="${escapedName}"
+    data-metric-value="${metricValue ?? ''}"
+    data-recorded-at="${recordedAt}"
+    title="${disputed ? 'Undo dispute' : 'Flag this finding as incorrect'}">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+    ${disputed ? 'Disputed' : 'Dispute'}
+  </button>`;
+}
+
+// Maps finding base type → Grade B threshold key + direction
+// Used to compute an auto-suggested threshold from disputed metric values.
+const FINDING_THRESHOLD_B = {
+  'Knee Valgus':                  { key: 'knee_valgus_b',      lowerIsWorse: false },
+  'Knee Varus':                   { key: 'knee_varus_b',       lowerIsWorse: false },
+  'Heel Rise':                    { key: 'heel_rise_b',        lowerIsWorse: false },
+  'Foot Pronation':               { key: 'foot_pronation_b',   lowerIsWorse: false },
+  'Foot Supination':              { key: 'foot_supination_b',  lowerIsWorse: false },
+  'Restricted Dorsiflexion':      { key: 'tibial_angle_b',     lowerIsWorse: true  },
+  'Reduced Ankle Dorsiflexion':   { key: 'gait_tibial_b',      lowerIsWorse: true  },
+  'Pelvic Tilt':                  { key: 'pelvic_tilt_b',      lowerIsWorse: false },
+  'Lateral Trunk Flexion':        { key: 'lateral_flexion_b',  lowerIsWorse: false },
+  'Shoulder Tilt':                { key: 'shoulder_tilt_b',    lowerIsWorse: false },
+  'Hip Lateral Shift':            { key: 'hip_shift_b',        lowerIsWorse: false },
+  'Excessive Forward Trunk Lean': { key: 'squat_trunk_lean_b', lowerIsWorse: false },
+  'Forward Trunk Lean':           { key: 'trunk_lean_b',       lowerIsWorse: false },
+  'Head Forward Posture':         { key: 'head_forward_b',     lowerIsWorse: false },
+  'Upper Trunk Flexion':          { key: 'upper_trunk_b',      lowerIsWorse: false },
+  'Spinal Segmental Curvature':   { key: 'spine_curve_b',      lowerIsWorse: false },
+};
+
+/**
+ * Compute a suggested Grade B threshold from disputed metric values.
+ * For higher-is-worse: suggest = max(disputed) × 1.10 (10 % above worst false-positive).
+ * For lower-is-worse:  suggest = min(disputed) × 0.90 (10 % more lenient than worst false-positive).
+ * Returns { key, current, suggested } or null if not computable.
+ */
+function computeSuggestedThreshold(suggestion) {
+  const mapping = FINDING_THRESHOLD_B[suggestion.baseType];
+  if (!mapping) return null;
+  const vals = suggestion.disputes.map(d => d.metricValue).filter(v => v != null && Number.isFinite(v));
+  if (!vals.length) return null;
+  const current = getThresholds()[mapping.key];
+  const suggested = mapping.lowerIsWorse
+    ? Math.round(Math.min(...vals) * 0.90 * 1000) / 1000
+    : Math.round(Math.max(...vals) * 1.10 * 1000) / 1000;
+  return { key: mapping.key, current, suggested };
+}
+
+function adaptiveBannerHtml(suggestion) {
+  if (!suggestion) return '';
+  const thresh = computeSuggestedThreshold(suggestion);
+  const suggestLine = thresh
+    ? `<div class="adaptive-suggest">Suggested Grade B threshold: <strong>${thresh.suggested}</strong> <span class="adaptive-current">(current: ${thresh.current})</span></div>`
+    : '';
+  const applyBtn = thresh
+    ? `<button class="adaptive-apply-btn" data-key="${thresh.key}" data-value="${thresh.suggested}">Apply</button>`
+    : '';
+  return `
+    <div class="adaptive-banner" id="adaptive-banner">
+      <div class="adaptive-banner-inner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        <div class="adaptive-banner-text">
+          <strong>${suggestion.baseType}</strong> disputed ${suggestion.count} time${suggestion.count !== 1 ? 's' : ''} — threshold may be too sensitive for you.
+          ${suggestLine}
+        </div>
+        <div class="adaptive-banner-actions">
+          ${applyBtn}
+          <button class="adaptive-recalib-btn" data-base-type="${suggestion.baseType}">Adjust</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Wire dispute button clicks on .dispute-btn elements within `container`.
+ * After each dispute change, re-checks for adaptive suggestions and
+ * updates the adaptive banner if present.
+ */
+function wireDisputeButtons(container, findingNames, onDisputeChange) {
+  container.querySelectorAll('.dispute-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { findingName, metricValue, recordedAt } = btn.dataset;
+      const disputed = isDisputed(findingName, recordedAt);
+      if (disputed) {
+        removeDispute(findingName, recordedAt);
+        btn.classList.remove('is-disputed');
+        btn.innerHTML = btn.innerHTML.replace('Disputed', 'Dispute');
+        btn.title = 'Flag this finding as incorrect';
+      } else {
+        addDispute(findingName, metricValue ? parseFloat(metricValue) : null, recordedAt);
+        btn.classList.add('is-disputed');
+        btn.innerHTML = btn.innerHTML.replace('Dispute', 'Disputed');
+        btn.title = 'Undo dispute';
+      }
+      if (onDisputeChange) onDisputeChange();
+    });
+  });
+}
+
+function wireAdaptiveBtn(container) {
+  container.querySelectorAll('.adaptive-recalib-btn').forEach(btn => {
+    btn.addEventListener('click', () => loadSettings('advanced'));
+  });
+  container.querySelectorAll('.adaptive-apply-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { key, value } = btn.dataset;
+      saveThresholdOverrides({ [key]: parseFloat(value) });
+      btn.textContent = 'Applied ✓';
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+      showToast(`Grade B threshold updated to ${value}`);
+    });
+  });
 }
 
 /** Filter a result object's findings by the current disabled set, recomputing worstSeverity. */

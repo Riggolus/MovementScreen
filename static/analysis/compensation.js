@@ -126,12 +126,14 @@ export function detectCompensations(
   if (isFrontal) {
 
     // 1. Knee valgus (frontal plane collapse)
+    //    Not relevant for overhead — the lower limb is not loaded.
     //    Positive deviation = knee medial to hip-ankle line = valgus.
     //    Higher deviation = worse.
     for (const [side, deviation] of [
       ['Left',  angles.leftKneeFrontalAngle],
       ['Right', angles.rightKneeFrontalAngle],
     ]) {
+      if (screenType === 'overhead') break;
       if (deviation != null) {
         const sev = gradeFromThresholds(
           deviation,
@@ -176,12 +178,14 @@ export function detectCompensations(
     }
 
     // 3. Knee varus (lateral bow — knee outside ankle vertical)
+    //    Not relevant for overhead — lower limb is unloaded.
     //    Uses ankle-vertical reference: immune to lateral hip shift.
     //    Positive proxy value = knee bowing laterally beyond the ankle = varus.
     for (const [side, varusProxy] of [
       ['Left',  angles.leftKneeVarus],
       ['Right', angles.rightKneeVarus],
     ]) {
+      if (screenType === 'overhead') break;
       if (varusProxy != null) {
         const sev = gradeFromThresholds(
           varusProxy,
@@ -225,11 +229,12 @@ export function detectCompensations(
       }
     }
 
-    // 5. Foot pronation (heel medial deviation — arch collapse / eversion)
+    // 5. Foot pronation — not relevant for overhead (foot loading not assessed)
     for (const [side, pronation] of [
       ['Left',  angles.leftFootPronation],
       ['Right', angles.rightFootPronation],
     ]) {
+      if (screenType === 'overhead') break;
       if (pronation != null) {
         const sev = gradeFromThresholds(
           pronation,
@@ -251,11 +256,12 @@ export function detectCompensations(
       }
     }
 
-    // 6. Foot supination (heel lateral deviation — inversion / lateral weight shift)
+    // 6. Foot supination — not relevant for overhead
     for (const [side, supination] of [
       ['Left',  angles.leftFootSupination],
       ['Right', angles.rightFootSupination],
     ]) {
+      if (screenType === 'overhead') break;
       if (supination != null) {
         const sev = gradeFromThresholds(
           supination,
@@ -389,11 +395,14 @@ export function detectCompensations(
     }
 
     // 7. Ankle dorsiflexion — tibial angle (primary lateral proxy)
+    //    Excluded from overhead: the tibia inclination during a standing arm raise
+    //    carries no clinical relevance for shoulder mobility assessment.
     //    Tibia angle from vertical at squat depth. Optimal: 30–40°. Lower = worse.
     for (const [side, angle] of [
       ['Left',  angles.tibialAngleLeft],
       ['Right', angles.tibialAngleRight],
     ]) {
+      if (screenType === 'overhead') break;
       if (angle != null) {
         const sev = gradeFromThresholds(
           angle,
@@ -491,18 +500,17 @@ export function detectCompensations(
       }
     }
 
-    // 12. Tibial bilateral asymmetry (lateral) — skip when a single side is selected
-    if (!lateralSide) {
+    // 12. Tibial bilateral asymmetry — not relevant for overhead
+    if (!lateralSide && screenType !== 'overhead') {
       checkBilateralAsymmetry(findings, t, 'Tibial Inclination', angles.tibialAngleLeft, angles.tibialAngleRight);
     }
 
-    // 13. Heel rise (lateral squat)
-    //     (foot_index.y - heel.y) / tibiaLen: 0 = flat foot, positive = heel risen above ball of foot.
-    //     Higher is worse.
+    // 13. Heel rise — not relevant for overhead (foot contact not a concern during arm raise)
     for (const [side, heelRise] of [
       ['Left',  angles.heelRiseLeft],
       ['Right', angles.heelRiseRight],
     ]) {
+      if (screenType === 'overhead') break;
       if (heelRise != null) {
         const sev = gradeFromThresholds(
           heelRise,

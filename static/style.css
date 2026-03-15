@@ -363,14 +363,60 @@ body {
   border-left: 4px solid var(--border-color, var(--border));
   border-radius: var(--r); padding: 16px; margin-bottom: 10px; box-shadow: var(--shadow-sm);
 }
-.finding-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.finding-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
 .severity-badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 3px 9px; border-radius: 50px; color: white; flex-shrink: 0; }
-.finding-name   { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
+.finding-name   { font-size: 15px; font-weight: 600; letter-spacing: -.2px; flex: 1; min-width: 0; }
+.finding-snap   { flex-shrink: 0; border-radius: 8px; display: block; width: 72px; height: 72px; }
 .finding-desc   { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 8px; }
 .finding-metric { font-size: 12px; color: var(--text-3); }
 .finding-what   { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 8px; }
 .finding-tips   { margin: 0; padding-left: 18px; }
 .finding-tips li { font-size: 13px; color: var(--text-2); line-height: 1.6; margin-bottom: 3px; }
+
+/* Dispute button */
+.finding-footer {
+  display: flex; justify-content: flex-end; margin-top: 10px; padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.dispute-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; color: var(--text-3);
+  background: none; border: 1.5px solid var(--border); border-radius: var(--r-sm);
+  padding: 4px 10px; cursor: pointer; font-family: inherit; transition: all .15s;
+  letter-spacing: .02em;
+}
+.dispute-btn:hover { border-color: var(--text-3); color: var(--text-2); }
+.dispute-btn.is-disputed {
+  background: var(--surface-2); border-color: var(--grade-b);
+  color: var(--grade-b);
+}
+/* Disputed finding card state */
+.finding-card.is-disputed { opacity: 0.6; }
+.finding-card.is-disputed .finding-name { text-decoration: line-through; }
+
+/* Adaptive suggestion banner */
+.adaptive-banner {
+  background: linear-gradient(135deg, rgba(99,102,241,.08), rgba(99,102,241,.04));
+  border: 1.5px solid rgba(99,102,241,.25); border-radius: var(--r);
+  padding: 14px 16px; margin: 12px 0;
+}
+.adaptive-banner-inner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.adaptive-banner-inner > svg { flex-shrink: 0; color: var(--primary); }
+.adaptive-banner-text { flex: 1; font-size: 13px; color: var(--text-2); line-height: 1.4; }
+.adaptive-banner-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.adaptive-suggest { font-size: 12px; margin-top: 4px; color: var(--text-2); }
+.adaptive-current { color: var(--text-3); }
+.adaptive-recalib-btn, .adaptive-apply-btn {
+  font-size: 12px; padding: 6px 12px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--primary); color: var(--primary);
+  background: none; font-weight: 600; cursor: pointer; white-space: nowrap;
+  font-family: inherit; transition: all .15s;
+}
+.adaptive-apply-btn { background: var(--primary); color: #fff; border-color: var(--primary); }
+.adaptive-recalib-btn:hover { background: var(--primary); color: #fff; }
+.adaptive-apply-btn:hover { opacity: .85; }
 .side-asym-badge {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 11px; font-weight: 600; color: #b45309;
