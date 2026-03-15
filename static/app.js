@@ -146,7 +146,7 @@ function updateHeader() {
   `;
   document.getElementById('nav-home-btn').addEventListener('click', () => showView('setup'));
   document.getElementById('nav-progress-btn').addEventListener('click', loadHistory);
-  document.getElementById('nav-settings-btn').addEventListener('click', loadSettings);
+  document.getElementById('nav-settings-btn').addEventListener('click', () => loadSettings('profile'));
 }
 
 // ── Assessment instructions ───────────────────────────────
