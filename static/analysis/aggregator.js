@@ -256,27 +256,6 @@ export function createAggregator(screenName) {
       }
     }
 
-    // Knee varus proxies: 25th percentile of ankle-vertical deviation values (most negative
-    // = worst varus), negated so positive = varus magnitude for grading.
-    // Uses the ankle as a fixed ground reference — immune to lateral hip shift.
-    // Uses same deep-frame subset as valgus for the same reason.
-    for (const [varusKey, devKey] of [
-      ['leftKneeVarus',  'leftKneeAnkleDeviation'],
-      ['rightKneeVarus', 'rightKneeAnkleDeviation'],
-    ]) {
-      const sourceFrames = depthFrames.length > 0 ? depthFrames : frames;
-      const vals = sourceFrames.map(f => f[devKey]).filter(v => v != null).sort((a, b) => a - b);
-      if (vals.length > 0) {
-        // 25th percentile is the most negative value (worst varus end of the distribution)
-        const idx = Math.max(0, Math.floor(vals.length * 0.25));
-        const p25 = vals[idx];
-        // Only set varus proxy if the distribution genuinely leans negative
-        if (p25 < -0.02) {
-          worst[varusKey] = -p25; // negate so positive = varus magnitude
-        }
-      }
-    }
-
     // Foot supination proxies: 25th percentile of pronation values (most negative = worst
     // supination), negated so positive = supination magnitude for grading.
     for (const [supinKey, pronKey] of [

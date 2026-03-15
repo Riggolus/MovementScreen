@@ -177,34 +177,6 @@ export function detectCompensations(
       }
     }
 
-    // 3. Knee varus (lateral bow — knee outside ankle vertical)
-    //    Not relevant for overhead — lower limb is unloaded.
-    //    Uses ankle-vertical reference: immune to lateral hip shift.
-    //    Positive proxy value = knee bowing laterally beyond the ankle = varus.
-    for (const [side, varusProxy] of [
-      ['Left',  angles.leftKneeVarus],
-      ['Right', angles.rightKneeVarus],
-    ]) {
-      if (screenType === 'overhead') break;
-      if (varusProxy != null) {
-        const sev = gradeFromThresholds(
-          varusProxy,
-          t.knee_varus_b, t.knee_varus_c, t.knee_varus_d,
-          t.knee_varus_e, t.knee_varus_f,
-          false,
-        );
-        if (sev !== 'A') {
-          findings.push({
-            name: `${side} Knee Varus`,
-            severity: sev,
-            description: `${side.toLowerCase()} knee bowing laterally beyond the ankle — may indicate tibial torsion, weak hip abductors, or structural genu varum`,
-            metricValue: Math.round(varusProxy * 1000) / 1000,
-            metricLabel: 'knee lateral deviation (normalized)',
-          });
-        }
-      }
-    }
-
     // 4. Pelvic tilt (hip line from horizontal)
     //    Signed: positive = right hip drops lower; higher abs = worse.
     if (angles.pelvicTiltDegrees != null) {
@@ -505,30 +477,25 @@ export function detectCompensations(
       checkBilateralAsymmetry(findings, t, 'Tibial Inclination', angles.tibialAngleLeft, angles.tibialAngleRight);
     }
 
-    // 13. Heel rise — not relevant for overhead (foot contact not a concern during arm raise)
+    // 13. Heel rise — binary: heels either lift or they don't.
+    //     Graduated severity would imply "a little rise is OK", which it isn't —
+    //     any clear heel-off indicates a mobility or loading fault.
+    //     Not relevant for overhead (foot contact isn't assessed during arm raise).
     for (const [side, heelRise] of [
       ['Left',  angles.heelRiseLeft],
       ['Right', angles.heelRiseRight],
     ]) {
       if (screenType === 'overhead') break;
-      if (heelRise != null) {
-        const sev = gradeFromThresholds(
-          heelRise,
-          t.heel_rise_b, t.heel_rise_c, t.heel_rise_d,
-          t.heel_rise_e, t.heel_rise_f,
-          false,
-        );
-        if (sev !== 'A') {
-          findings.push({
-            name: `${side} Heel Rise`,
-            severity: sev,
-            description:
-              `${side.toLowerCase()} heel elevating off the floor during the squat — ` +
-              'suggests limited ankle dorsiflexion, tight calf complex, or weight shifting onto the forefoot',
-            metricValue: Math.round(heelRise * 1000) / 1000,
-            metricLabel: 'heel rise above ball of foot (tibia-normalised)',
-          });
-        }
+      if (heelRise != null && heelRise > t.heel_rise_b) {
+        findings.push({
+          name: `${side} Heel Rise`,
+          severity: 'C',
+          description:
+            `${side.toLowerCase()} heel leaving the floor — ` +
+            'indicates limited ankle dorsiflexion, tight calf complex, or compensatory forefoot loading',
+          metricValue: Math.round(heelRise * 1000) / 1000,
+          metricLabel: 'heel rise (tibia-normalised)',
+        });
       }
     }
   }
