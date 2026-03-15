@@ -135,13 +135,9 @@ function updateHeader() {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       <span>Home</span>
     </button>
-    <button class="nav-btn" id="nav-summary-btn">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/><path d="M8 12h.01M12 8h.01"/></svg>
-      <span>Summary</span>
-    </button>
-    <button class="nav-btn" id="nav-history-btn">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      <span>History</span>
+    <button class="nav-btn" id="nav-progress-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span>Progress</span>
     </button>
     <button class="nav-btn" id="nav-settings-btn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -149,8 +145,7 @@ function updateHeader() {
     </button>
   `;
   document.getElementById('nav-home-btn').addEventListener('click', () => showView('setup'));
-  document.getElementById('nav-summary-btn').addEventListener('click', loadSummary);
-  document.getElementById('nav-history-btn').addEventListener('click', loadHistory);
+  document.getElementById('nav-progress-btn').addEventListener('click', loadHistory);
   document.getElementById('nav-settings-btn').addEventListener('click', loadSettings);
 }
 
@@ -1072,8 +1067,11 @@ function renderResults(data) {
         </div>
       `;
     }
-    const suggestion = getAdaptiveSuggestion(data.findings.map(f => f.name));
+    const suggestion     = getAdaptiveSuggestion(data.findings.map(f => f.name));
+    const suggFromMissed = getAdaptiveFromSuggestions(data.findings.map(f => f.name));
     html += adaptiveBannerHtml(suggestion);
+    html += suggestionBannerHtml(suggFromMissed);
+    html += missedFindingsPanelHtml(data.findings.map(f => f.name), data.recorded_at);
   }
 
   // ── Biomechanical Measurements (collapsible) ──────────────
@@ -1160,6 +1158,19 @@ function renderResults(data) {
     }
   });
   wireAdaptiveBtn(views.results);
+  wireMissedPanel(views.results, data.findings.map(f => f.name), () => {
+    const sb = document.getElementById('suggestion-banner');
+    const sugg = getAdaptiveFromSuggestions(data.findings.map(f => f.name));
+    if (sb) {
+      if (sugg) {
+        sb.querySelector('.adaptive-banner-text').innerHTML =
+          `<strong>${sugg.baseType}</strong> flagged as missed ${sugg.count} time${sugg.count !== 1 ? 's' : ''} — threshold may be too strict.`;
+        sb.classList.remove('hidden');
+      } else {
+        sb.classList.add('hidden');
+      }
+    }
+  });
   document.getElementById('again-btn').addEventListener('click', resetApp);
   document.getElementById('report-from-results-btn').addEventListener('click', () => renderReport(data, 'results'));
   document.getElementById('history-from-results-btn').addEventListener('click', loadHistory);
@@ -1289,7 +1300,8 @@ async function loadHistory() {
   views.history.innerHTML = `<div class="processing-content"><div class="spinner-ring"></div></div>`;
 
   try {
-    const assessments = await getAssessments(50);
+    const assessments = await getAssessments(200);
+    const summary = computeGlobalSummary(assessments);
 
     // Build by_screen progress (oldest-first for the trend chart)
     const by_screen = { squat: [], lunge: [], overhead: [], gait: [] };
@@ -1299,20 +1311,81 @@ async function loadHistory() {
       }
     }
 
-    renderHistory(assessments, by_screen);
+    renderHistory(assessments.slice(0, 50), by_screen, summary);
 
   } catch (err) {
     views.history.innerHTML = `<div class="error-content"><div class="error-icon">⚠</div><p>${err.message}</p></div>`;
   }
 }
 
-function renderHistory(assessments, byScreen) {
+function renderHistory(assessments, byScreen, summary) {
+  const firstName = getUserFirstName();
   let html = `
     <div class="history-header">
-      <h1>${getUserFirstName() ? `${getUserFirstName()}'s Progress` : 'Your Progress'}</h1>
-      <p>Track how your movement quality changes over time</p>
+      <h1>${firstName ? `${firstName}'s Progress` : 'Your Progress'}</h1>
+      <p>Movement summary and assessment history</p>
     </div>
   `;
+
+  // ── Global summary section ─────────────────────────────
+  if (summary) {
+    const fromDate = summary.dateRange.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const toDate   = summary.dateRange.to.toLocaleDateString('en-US',   { month: 'short', day: 'numeric', year: 'numeric' });
+    const sameDay  = fromDate === toDate;
+    const overallTrendClass = summary.overallTrend ? TREND_CLASS[summary.overallTrend] : '';
+    const overallTrendIcon  = summary.overallTrend ? TREND_ICON[summary.overallTrend]  : '';
+    const overallTrendLabel = summary.overallTrend ? TREND_LABEL[summary.overallTrend] : '';
+
+    const chainCards = summary.chains.map(chain => {
+      const isPassing  = chain.grade === 'A';
+      const gradeColor = SEV_COLOR_VAR[chain.grade];
+      const trendHtml  = chain.trend
+        ? `<span class="chain-trend ${TREND_CLASS[chain.trend]}">${TREND_ICON[chain.trend]} ${TREND_LABEL[chain.trend]}</span>`
+        : '';
+      const confirmedHtml = chain.confirmedIn.length
+        ? `<div class="chain-confirmed">Confirmed in: ${chain.confirmedIn.map(s => `<span class="chain-tag">${s}</span>`).join('')}</div>`
+        : '';
+      const correctionsHtml = !isPassing
+        ? `<div class="chain-corrections"><p class="chain-corrections-label">Recommended focus</p><ul>${chain.corrections.map(c => `<li>${c}</li>`).join('')}</ul></div>`
+        : '';
+      return `
+        <div class="chain-card ${isPassing ? 'chain-passing' : ''}">
+          <div class="chain-header">
+            <span class="chain-icon">${chain.icon}</span>
+            <div class="chain-title-group"><span class="chain-label">${chain.label}</span>${confirmedHtml}</div>
+            <div class="chain-grade-wrap">
+              <span class="chain-grade" style="background:${gradeColor}">${chain.grade}</span>
+              ${trendHtml}
+            </div>
+          </div>
+          <p class="chain-description">${chain.description}</p>
+          ${correctionsHtml}
+        </div>`;
+    }).join('');
+
+    html += `
+      <div class="summary-wrap">
+        <div class="summary-hero">
+          <div class="summary-score-block">
+            <div class="summary-overall-grade" style="background:${SEV_COLOR_VAR[summary.overallGrade]}">${summary.overallGrade}</div>
+            <div class="summary-score-meta">
+              <span class="summary-score-label">Movement System</span>
+              <span class="summary-score-sublabel">${SEV_LABEL_S[summary.overallGrade]}</span>
+            </div>
+          </div>
+          ${summary.overallTrend ? `<div class="summary-trend-block ${overallTrendClass}"><span class="summary-trend-icon">${overallTrendIcon}</span><span class="summary-trend-label">${overallTrendLabel}</span></div>` : ''}
+        </div>
+        <div class="summary-meta-row">
+          <span>${summary.assessmentCount} assessment${summary.assessmentCount !== 1 ? 's' : ''}</span>
+          <span>·</span>
+          <span>${sameDay ? fromDate : `${fromDate} – ${toDate}`}</span>
+          ${summary.activeChainCount > 0 ? `<span>·</span><span>${summary.activeChainCount} active chain${summary.activeChainCount !== 1 ? 's' : ''}</span>` : ''}
+        </div>
+        <h2 class="summary-section-title">Movement Chains</h2>
+        <div class="summary-chains">${chainCards}</div>
+      </div>
+    `;
+  }
 
   // Trend chart
   const hasData = Object.values(byScreen).some(pts => pts.length > 0);
@@ -1339,7 +1412,8 @@ function renderHistory(assessments, byScreen) {
   } else {
     html += `<div class="assessments-list">`;
     for (const a of assessments) {
-      const color = SEV_COLOR[a.worst_severity];
+      const displayA   = applyDisabledFindings(a);
+      const color      = SEV_COLOR[displayA.worst_severity];
       const date  = new Date(a.recorded_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       const screenName = a.screen_type.charAt(0).toUpperCase() + a.screen_type.slice(1);
       html += `
@@ -1350,7 +1424,7 @@ function renderHistory(assessments, byScreen) {
               <div class="assessment-title">${screenName}${a.screen_type === 'lunge' && a.lead_side ? ` (${a.lead_side})` : ''} · ${ANGLE_LABEL[a.camera_angle] ?? a.camera_angle}</div>
               <div class="assessment-date">${date}</div>
             </div>
-            <span class="assessment-sev-pill" style="background:${color}">${SEV_LABEL[a.worst_severity]}</span>
+            <span class="assessment-sev-pill" style="background:${color}">${SEV_LABEL[displayA.worst_severity]}</span>
             <button class="delete-btn" data-delete-id="${a.id}" title="Delete assessment" aria-label="Delete assessment">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
             </button>
@@ -1450,6 +1524,7 @@ async function toggleAssessmentDetail(id) {
         `;
       }
     }
+    inner += missedFindingsPanelHtml(displayData.findings.map(f => f.name), data.recorded_at);
     inner += `
       <div style="padding:10px 0 4px">
         <button class="btn-ghost report-btn-history" style="font-size:13px;display:flex;align-items:center;gap:6px" data-assessment-id="${id}">
@@ -1461,6 +1536,7 @@ async function toggleAssessmentDetail(id) {
     body.innerHTML = inner;
     wireDisputeButtons(body, displayData.findings.map(f => f.name), null);
     wireAdaptiveBtn(body);
+    wireMissedPanel(body, displayData.findings.map(f => f.name), null);
     body.querySelector('.report-btn-history').addEventListener('click', () => renderReport(data, 'history'));
   } catch {
     body.innerHTML = `<p style="padding:16px;color:var(--severe);font-size:13px">Failed to load details.</p>`;
@@ -3137,6 +3213,159 @@ function wireAdaptiveBtn(container) {
     btn.addEventListener('click', () => loadSettings('advanced'));
   });
   container.querySelectorAll('.adaptive-apply-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { key, value } = btn.dataset;
+      saveThresholdOverrides({ [key]: parseFloat(value) });
+      btn.textContent = 'Applied ✓';
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+      showToast(`Grade B threshold updated to ${value}`);
+    });
+  });
+}
+
+// ── Suggest missing compensations ─────────────────────────
+// Lets users flag compensations that were present but not detected,
+// mirroring the dispute system but in the opposite direction (threshold too strict).
+const SUGGESTIONS_KEY    = 'ms_suggestions';
+const SUGGESTION_TRIGGER = 3;
+
+function getSuggestions() {
+  try { return JSON.parse(localStorage.getItem(SUGGESTIONS_KEY) || '[]'); } catch { return []; }
+}
+function saveSuggestions(arr) {
+  try { localStorage.setItem(SUGGESTIONS_KEY, JSON.stringify(arr)); } catch {}
+}
+function hasSuggested(baseType, recordedAt) {
+  return getSuggestions().some(s => s.baseType === baseType && s.recordedAt === recordedAt);
+}
+function addSuggestion(baseType, recordedAt) {
+  const arr = getSuggestions();
+  if (arr.some(s => s.baseType === baseType && s.recordedAt === recordedAt)) return;
+  arr.push({ baseType, recordedAt });
+  saveSuggestions(arr);
+}
+function removeSuggestion(baseType, recordedAt) {
+  saveSuggestions(getSuggestions().filter(s => !(s.baseType === baseType && s.recordedAt === recordedAt)));
+}
+
+/** Return the most-suggested missing compensation if it exceeds the trigger count. */
+function getAdaptiveFromSuggestions(currentFindingNames) {
+  const presentBases = new Set(currentFindingNames.map(findingBaseType));
+  const counts = {};
+  for (const s of getSuggestions()) {
+    if (!presentBases.has(s.baseType)) {
+      counts[s.baseType] = (counts[s.baseType] || 0) + 1;
+    }
+  }
+  let best = null;
+  for (const [baseType, count] of Object.entries(counts)) {
+    if (count >= SUGGESTION_TRIGGER && (!best || count > best.count)) {
+      best = { baseType, count };
+    }
+  }
+  return best;
+}
+
+function computeSuggestedThresholdFromSuggestion(baseType) {
+  const mapping = FINDING_THRESHOLD_B[baseType];
+  if (!mapping) return null;
+  const current = getThresholds()[mapping.key];
+  if (current == null) return null;
+  // Lower the B threshold so more cases get caught (opposite of dispute)
+  const suggested = mapping.lowerIsWorse
+    ? Math.round(current * 1.15 * 1000) / 1000  // raise = easier to trigger for lower-is-worse
+    : Math.round(current * 0.85 * 1000) / 1000; // lower = easier to trigger for higher-is-worse
+  return { key: mapping.key, current, suggested };
+}
+
+function suggestionBannerHtml(sugg) {
+  if (!sugg) return '';
+  const thresh = computeSuggestedThresholdFromSuggestion(sugg.baseType);
+  const suggestLine = thresh
+    ? `<div class="adaptive-suggest">Suggested Grade B threshold: <strong>${thresh.suggested}</strong> <span class="adaptive-current">(current: ${thresh.current})</span></div>`
+    : '';
+  const applyBtn = thresh
+    ? `<button class="sugg-apply-btn" data-key="${thresh.key}" data-value="${thresh.suggested}">Apply</button>`
+    : '';
+  return `
+    <div class="adaptive-banner" id="suggestion-banner">
+      <div class="adaptive-banner-inner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div class="adaptive-banner-text">
+          <strong>${sugg.baseType}</strong> flagged as missed ${sugg.count} time${sugg.count !== 1 ? 's' : ''} — threshold may be too strict.
+          ${suggestLine}
+        </div>
+        <div class="adaptive-banner-actions">
+          ${applyBtn}
+          <button class="adaptive-recalib-btn" data-base-type="${sugg.baseType}">Adjust</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Build the "Missed a compensation?" collapsible panel.
+ * Shows FINDING_CATEGORIES entries not already present in currentFindingNames.
+ */
+function missedFindingsPanelHtml(currentFindingNames, recordedAt) {
+  if (!recordedAt) return '';
+  const disabled = getDisabledFindings();
+  const presentMatches = new Set(currentFindingNames.flatMap(n =>
+    FINDING_CATEGORIES.filter(c => n.includes(c.match)).map(c => c.key)
+  ));
+  // Exclude structural/meta categories that can't meaningfully be "missed"
+  const EXCLUDE_KEYS = new Set(['bilateral_asym', 'squat_depth', 'gait', 'knee_varus']);
+  const available = FINDING_CATEGORIES.filter(c =>
+    !presentMatches.has(c.key) && !disabled.has(c.key) && !EXCLUDE_KEYS.has(c.key)
+  );
+  if (available.length === 0) return '';
+
+  const pills = available.map(c => {
+    const suggested = hasSuggested(c.label, recordedAt);
+    return `<button class="suggest-pill${suggested ? ' is-suggested' : ''}"
+      data-base-type="${c.label}" data-recorded-at="${recordedAt}"
+      title="${c.desc}">${c.label}</button>`;
+  }).join('');
+
+  return `
+    <div class="missed-section">
+      <button class="missed-toggle-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Missed a compensation?
+      </button>
+      <div class="missed-panel hidden">
+        <p class="missed-label">Tap any that were present but not detected:</p>
+        <div class="suggest-pills">${pills}</div>
+      </div>
+    </div>
+  `;
+}
+
+function wireMissedPanel(container, currentFindingNames, onSuggestChange) {
+  const toggle = container.querySelector('.missed-toggle-btn');
+  const panel  = container.querySelector('.missed-panel');
+  if (toggle && panel) {
+    toggle.addEventListener('click', () => panel.classList.toggle('hidden'));
+  }
+
+  container.querySelectorAll('.suggest-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { baseType, recordedAt } = btn.dataset;
+      if (hasSuggested(baseType, recordedAt)) {
+        removeSuggestion(baseType, recordedAt);
+        btn.classList.remove('is-suggested');
+      } else {
+        addSuggestion(baseType, recordedAt);
+        btn.classList.add('is-suggested');
+      }
+      if (onSuggestChange) onSuggestChange();
+    });
+  });
+
+  // Wire apply button for suggestion banner
+  container.querySelectorAll('.sugg-apply-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const { key, value } = btn.dataset;
       saveThresholdOverrides({ [key]: parseFloat(value) });
