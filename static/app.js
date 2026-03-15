@@ -76,6 +76,10 @@ let timerInterval  = null;
 // ── Depth snapshot (best-depth frame for findings illustration) ────────────
 let bestDepthSnapshot     = null;  // { dataUrl, lms }
 let bestDepthRatioSeen    = 0;
+
+// ── Landmark smoothing (EMA, alpha=0.35 — lower = smoother but more lag) ───
+const SMOOTH_ALPHA = 0.35;
+let smoothedLms = null;
 let secondsElapsed = 0;
 
 // ── 3D capture state ──────────────────────────────────────
@@ -411,6 +415,7 @@ function beginRecording() {
   debugDepthFrames = 0;
   bestDepthSnapshot  = null;
   bestDepthRatioSeen = 0;
+  smoothedLms        = null;
   document.getElementById('position-overlay').classList.add('hidden');
   nextAngleBtn.classList.add('hidden'); // hidden until minimum frames collected
   if (getShowAngleOverlay()) debugOverlay.classList.remove('hidden');
@@ -690,7 +695,19 @@ function startSkeletonLoop() {
       try {
         const result = poseLandmarker.detectForVideo(preview, now);
         if (result.landmarks?.length > 0) {
-          const lms = result.landmarks[0];
+          const rawLms = result.landmarks[0];
+          // EMA smoothing — blends current frame toward previous to reduce jitter
+          if (!smoothedLms) {
+            smoothedLms = rawLms.map(l => ({ ...l }));
+          } else {
+            for (let i = 0; i < rawLms.length; i++) {
+              smoothedLms[i].x = SMOOTH_ALPHA * rawLms[i].x + (1 - SMOOTH_ALPHA) * smoothedLms[i].x;
+              smoothedLms[i].y = SMOOTH_ALPHA * rawLms[i].y + (1 - SMOOTH_ALPHA) * smoothedLms[i].y;
+              smoothedLms[i].z = SMOOTH_ALPHA * rawLms[i].z + (1 - SMOOTH_ALPHA) * smoothedLms[i].z;
+              smoothedLms[i].visibility = rawLms[i].visibility; // keep raw visibility (not smoothed)
+            }
+          }
+          const lms = smoothedLms;
 
           // Skeleton colour: green when position is good, indigo otherwise
           const skelColor = (isPositioning && positionGoodFrames > 0)
