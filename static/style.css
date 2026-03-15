@@ -363,9 +363,10 @@ body {
   border-left: 4px solid var(--border-color, var(--border));
   border-radius: var(--r); padding: 16px; margin-bottom: 10px; box-shadow: var(--shadow-sm);
 }
-.finding-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.finding-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
 .severity-badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 3px 9px; border-radius: 50px; color: white; flex-shrink: 0; }
-.finding-name   { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
+.finding-name   { font-size: 15px; font-weight: 600; letter-spacing: -.2px; flex: 1; min-width: 0; }
+.finding-snap   { flex-shrink: 0; border-radius: 8px; display: block; width: 72px; height: 72px; }
 .finding-desc   { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 8px; }
 .finding-metric { font-size: 12px; color: var(--text-3); }
 .finding-what   { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 8px; }
