@@ -165,7 +165,7 @@ export function detectCompensations(
       );
       if (sev !== 'A') {
         const direction = angles.lateralTrunkShift != null
-          ? (angles.lateralTrunkShift > 0 ? 'right' : 'left')
+          ? (angles.lateralTrunkShift > 0 ? 'left' : 'right') // image-right = person's anatomical left
           : '';
         findings.push({
           name: `Lateral Trunk Flexion${direction ? ` (${direction})` : ''}`,
@@ -267,7 +267,7 @@ export function detectCompensations(
         false,
       );
       if (sev !== 'A') {
-        const direction = angles.hipLateralShift > 0 ? 'right' : 'left';
+        const direction = angles.hipLateralShift > 0 ? 'left' : 'right'; // image-right = person's anatomical left
         findings.push({
           name: `Hip Lateral Shift (${direction})`,
           severity: sev,
