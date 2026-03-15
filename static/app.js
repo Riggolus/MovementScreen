@@ -911,6 +911,10 @@ async function analyseLocally() {
     result.recorded_at = record.recorded_at;
     result.saved = true;
 
+    // Update reminder's last-assessment timestamp
+    const rem = getReminderSettings();
+    if (rem.enabled) saveReminderSettings({ ...rem, lastAssessmentAt: record.recorded_at });
+
     renderResults(applyDisabledFindings(result));
     showView('results');
 
@@ -1288,7 +1292,7 @@ async function loadHistory() {
 function renderHistory(assessments, byScreen) {
   let html = `
     <div class="history-header">
-      <h1>Your Progress</h1>
+      <h1>${getUserFirstName() ? `${getUserFirstName()}'s Progress` : 'Your Progress'}</h1>
       <p>Track how your movement quality changes over time</p>
     </div>
   `;
@@ -1503,6 +1507,7 @@ function showError(msg) {
 
 // ── Reset ─────────────────────────────────────────────────
 function resetApp() {
+  updateSetupHero();
   aggregator = null; isRecording = false;
   is3D = false; phase3DIndex = 0; aggregators3D = []; phase3DFrames = 0;
   showView('setup');
@@ -2630,8 +2635,12 @@ function generateSummary(data) {
   const count = data.findings.length;
   const screenName = data.screen_name || 'movement screen';
 
+  const name = getUserFirstName();
+  const you  = name ? name : null; // used for personalised openers
+
   if (sev === 'A' || sev === 'none') {
-    return `Your ${screenName} showed no significant compensation patterns. Your movement quality looks great — keep up the good work and continue monitoring over time.`;
+    return (you ? `Great work, ${you}! ` : '') +
+      `Your ${screenName} showed no significant compensation patterns. Your movement quality looks great — keep up the good work and continue monitoring over time.`;
   }
 
   const sevText = { B: 'minimal', C: 'minor', D: 'moderate', E: 'significant', F: 'notable', mild: 'minor', moderate: 'moderate', severe: 'notable' }[sev] || sev;
@@ -2769,6 +2778,122 @@ function renderReport(data, source) {
   document.getElementById('report-print-btn').addEventListener('click', () => window.print());
   document.getElementById('report-back-btn').addEventListener('click', source === 'history' ? loadHistory : () => showView('results'));
   showView('report');
+}
+
+// ── Personalization ───────────────────────────────────────
+
+/** Returns the user's first name, or null if none saved. */
+function getUserFirstName() {
+  const name = (getProfile().name || '').trim();
+  return name ? name.split(/\s+/)[0] : null;
+}
+
+/** Time-appropriate greeting with optional name. */
+function buildGreeting(name) {
+  const h = new Date().getHours();
+  const tod = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  return name ? `${tod}, ${name}` : tod;
+}
+
+/** Refresh the setup-view hero text with personalized greeting + reminder banner. */
+function updateSetupHero() {
+  const heroH1 = document.querySelector('#view-setup .hero h1');
+  const heroP  = document.querySelector('#view-setup .hero p');
+  if (!heroH1 || !heroP) return;
+  const name = getUserFirstName();
+  heroH1.innerHTML = name ? buildGreeting(name) : 'Movement<br/>Analysis';
+  heroP.textContent = 'Choose an assessment to get started.';
+}
+
+// ── Reminder settings ─────────────────────────────────────
+const REMINDER_KEY = 'ms_reminder';
+const REMINDER_FREQUENCIES = [
+  { label: 'Daily',       days: 1  },
+  { label: '2 days',      days: 2  },
+  { label: 'Weekly',      days: 7  },
+  { label: '2 weeks',     days: 14 },
+  { label: 'Monthly',     days: 30 },
+];
+
+function getReminderSettings() {
+  try { return { enabled: false, frequencyDays: 7, lastAssessmentAt: null, ...JSON.parse(localStorage.getItem(REMINDER_KEY) || '{}') }; }
+  catch { return { enabled: false, frequencyDays: 7, lastAssessmentAt: null }; }
+}
+function saveReminderSettings(s) {
+  try { localStorage.setItem(REMINDER_KEY, JSON.stringify(s)); } catch {}
+}
+
+/** Compute days since last assessment. Returns null if unknown. */
+function daysSinceLastAssessment(settings) {
+  const ts = settings.lastAssessmentAt;
+  if (!ts) return null;
+  return Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
+}
+
+/** Format the next-due date string for display. */
+function nextDueLabel(settings) {
+  const ts = settings.lastAssessmentAt;
+  if (!ts) return 'Now';
+  const nextMs = new Date(ts).getTime() + settings.frequencyDays * 86400000;
+  const diff = Math.ceil((nextMs - Date.now()) / 86400000);
+  if (diff <= 0) return 'Now (overdue)';
+  if (diff === 1) return 'Tomorrow';
+  return `In ${diff} days`;
+}
+
+/** Show an in-app reminder banner on the setup view if the user is overdue. */
+async function checkAndShowReminder() {
+  const settings = getReminderSettings();
+  if (!settings.enabled) return;
+
+  // Populate lastAssessmentAt from IndexedDB if not cached
+  if (!settings.lastAssessmentAt) {
+    try {
+      const recent = await getAssessments(1);
+      if (recent.length) {
+        settings.lastAssessmentAt = recent[0].recorded_at;
+        saveReminderSettings(settings);
+      }
+    } catch { /* offline / no DB — skip */ }
+  }
+
+  const days = daysSinceLastAssessment(settings);
+  const overdue = days === null || days >= settings.frequencyDays;
+  if (!overdue) return;
+
+  // Inject banner into setup view hero
+  const hero = document.querySelector('#view-setup .hero');
+  if (hero && !document.getElementById('reminder-banner')) {
+    const name = getUserFirstName();
+    const msg = days === null
+      ? `Time to start your movement screens${name ? `, ${name}` : ''}!`
+      : `It's been ${days} day${days !== 1 ? 's' : ''} since your last assessment${name ? `, ${name}` : ''}.`;
+    const banner = document.createElement('div');
+    banner.id = 'reminder-banner';
+    banner.className = 'reminder-banner';
+    banner.innerHTML = `
+      <div class="reminder-banner-inner">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span>${msg} Time for your next screen.</span>
+        <button class="reminder-dismiss" aria-label="Dismiss">✕</button>
+      </div>
+    `;
+    banner.querySelector('.reminder-dismiss').addEventListener('click', () => {
+      banner.remove();
+      // Snooze: update lastAssessmentAt to now so it won't fire again until next cycle
+      saveReminderSettings({ ...getReminderSettings(), lastAssessmentAt: new Date().toISOString() });
+    });
+    hero.after(banner);
+  }
+
+  // Browser notification (if permission granted)
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    const days2 = days ?? 0;
+    const body = days2 === 0
+      ? 'Open MovementScreen to run your next evaluation.'
+      : `It's been ${days2} day${days2 !== 1 ? 's' : ''} — time for your next movement screen.`;
+    new Notification('MovementScreen', { body, icon: '/static/icons/icon-192.png' });
+  }
 }
 
 // ── Angle overlay setting ─────────────────────────────────
@@ -3287,7 +3412,8 @@ function showTutorialOnly(onDone) {
 
 // ── Settings ──────────────────────────────────────────────
 function loadSettings(activeTab = 'profile') {
-  const p = getProfile();
+  const p   = getProfile();
+  const rem = getReminderSettings();
   let unit = 'cm';
   let selectedSex = p.sex || '';
   let selectedAge = p.ageRange || '';
@@ -3367,6 +3493,27 @@ function loadSettings(activeTab = 'profile') {
               </div>
             </div>
             <button class="btn-primary" id="s-save-profile">Save Profile</button>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <p class="settings-section-title">Reminders</p>
+          <p class="settings-section-desc">Get notified when it's time for your next set of evaluations.</p>
+          <label class="settings-toggle-row">
+            <span class="settings-toggle-label">
+              <span>Assessment reminders</span>
+              <span class="settings-toggle-desc">Show a reminder when your next screen is due</span>
+            </span>
+            <input type="checkbox" id="s-reminder-toggle" class="settings-toggle" ${rem.enabled ? 'checked' : ''} />
+          </label>
+          <div id="s-reminder-config" class="${rem.enabled ? '' : 'hidden'}" style="margin-top:12px">
+            <p class="option-label" style="margin-bottom:8px">Frequency</p>
+            <div class="toggle-group" id="s-freq-group">
+              ${REMINDER_FREQUENCIES.map(f =>
+                `<button class="toggle-btn${rem.frequencyDays === f.days ? ' active' : ''}" data-freq="${f.days}">${f.label}</button>`
+              ).join('')}
+            </div>
+            <p class="reminder-next-label">Next reminder: <strong id="s-reminder-next">${nextDueLabel(rem)}</strong></p>
           </div>
         </div>
       </div>
@@ -3451,6 +3598,7 @@ function loadSettings(activeTab = 'profile') {
       }
       saveProfile({ name, heightCm, sex: selectedSex || null, ageRange: selectedAge || null });
       showToast('Profile saved');
+      updateSetupHero();
     });
   }
 
@@ -3463,6 +3611,33 @@ function loadSettings(activeTab = 'profile') {
       saveDisabledFindings(d);
       const label = document.getElementById(`ftl-${key}`);
       if (label) label.classList.toggle('disabled', !checkbox.checked);
+    });
+  });
+
+  // Reminder toggle + frequency wiring (Profile tab)
+  const reminderToggle = document.getElementById('s-reminder-toggle');
+  const reminderConfig = document.getElementById('s-reminder-config');
+  if (reminderToggle) {
+    reminderToggle.addEventListener('change', async () => {
+      const enabled = reminderToggle.checked;
+      if (enabled && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        const perm = await Notification.requestPermission();
+        if (perm === 'denied') showToast('Notification permission denied — reminders will show in-app only');
+      }
+      const s = getReminderSettings();
+      saveReminderSettings({ ...s, enabled });
+      reminderConfig?.classList.toggle('hidden', !enabled);
+    });
+  }
+  document.getElementById('s-freq-group')?.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('s-freq-group').querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const days = parseInt(btn.dataset.freq, 10);
+      const s = getReminderSettings();
+      saveReminderSettings({ ...s, frequencyDays: days });
+      const nextEl = document.getElementById('s-reminder-next');
+      if (nextEl) nextEl.textContent = nextDueLabel(getReminderSettings());
     });
   });
 
@@ -3511,5 +3686,7 @@ function loadSettings(activeTab = 'profile') {
 // ── Boot ─────────────────────────────────────────────────
 initDisabledFindings();
 updateHeader();
+updateSetupHero();
 if (!localStorage.getItem(ONBOARDING_KEY)) { showOnboarding(); }
 showView('setup');
+checkAndShowReminder();

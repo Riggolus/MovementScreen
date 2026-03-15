@@ -1438,6 +1438,25 @@ body {
   justify-content: flex-start; width: auto; gap: 8px;
 }
 .settings-section .btn-primary { margin-top: 16px; }
+.reminder-next-label { font-size: 12px; color: var(--text-3); margin-top: 10px; }
+
+/* Reminder banner on setup view */
+.reminder-banner {
+  background: linear-gradient(135deg, rgba(99,102,241,.10), rgba(99,102,241,.05));
+  border: 1.5px solid rgba(99,102,241,.28); border-radius: var(--r);
+  margin: 0 0 16px; overflow: hidden;
+}
+.reminder-banner-inner {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  font-size: 13px; color: var(--text-2); line-height: 1.4;
+}
+.reminder-banner-inner > svg { flex-shrink: 0; color: var(--primary); }
+.reminder-banner-inner > span { flex: 1; }
+.reminder-dismiss {
+  flex-shrink: 0; background: none; border: none; cursor: pointer;
+  color: var(--text-3); font-size: 14px; padding: 4px; line-height: 1;
+}
+.reminder-dismiss:hover { color: var(--text); }
 .s-calib-picker {
   display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
 }
