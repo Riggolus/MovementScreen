@@ -1157,7 +1157,7 @@ function renderResults(data) {
       }
     }
   });
-  wireAdaptiveBtn(views.results);
+  wireAdaptiveBtn(views.results, () => renderCalibrationPanel(data));
   wireMissedPanel(views.results, data.findings.map(f => f.name), () => {
     const sb = document.getElementById('suggestion-banner');
     const sugg = getAdaptiveFromSuggestions(data.findings.map(f => f.name));
@@ -1170,7 +1170,7 @@ function renderResults(data) {
         sb.classList.add('hidden');
       }
     }
-  });
+  }, () => renderCalibrationPanel(data));
   document.getElementById('again-btn').addEventListener('click', resetApp);
   document.getElementById('report-from-results-btn').addEventListener('click', () => renderReport(data, 'results'));
   document.getElementById('history-from-results-btn').addEventListener('click', loadHistory);
@@ -1320,14 +1320,15 @@ async function loadHistory() {
 
 function renderHistory(assessments, byScreen, summary) {
   const firstName = getUserFirstName();
-  let html = `
+  const headerHtml = `
     <div class="history-header">
       <h1>${firstName ? `${firstName}'s Progress` : 'Your Progress'}</h1>
       <p>Movement summary and assessment history</p>
     </div>
   `;
 
-  // ── Global summary section ─────────────────────────────
+  // ── Overview tab content ───────────────────────────────────
+  let overviewHtml = '';
   if (summary) {
     const fromDate = summary.dateRange.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const toDate   = summary.dateRange.to.toLocaleDateString('en-US',   { month: 'short', day: 'numeric', year: 'numeric' });
@@ -1363,7 +1364,7 @@ function renderHistory(assessments, byScreen, summary) {
         </div>`;
     }).join('');
 
-    html += `
+    overviewHtml = `
       <div class="summary-wrap">
         <div class="summary-hero">
           <div class="summary-score-block">
@@ -1385,38 +1386,38 @@ function renderHistory(assessments, byScreen, summary) {
         <div class="summary-chains">${chainCards}</div>
       </div>
     `;
+  } else {
+    overviewHtml = `<p class="empty-state">Complete at least one assessment to see your movement summary.</p>`;
   }
 
-  // Trend chart
+  // ── Sessions tab content ───────────────────────────────────
   const hasData = Object.values(byScreen).some(pts => pts.length > 0);
-  html += `<div class="card chart-card"><h2 class="card-title">Severity Trend</h2>`;
+  let sessionsHtml = `<div class="card chart-card"><h2 class="card-title">Severity Trend</h2>`;
   if (hasData) {
-    html += `<div id="trend-chart-container" class="trend-chart"></div>`;
-    html += `<div class="trend-legend">`;
+    sessionsHtml += `<div id="trend-chart-container" class="trend-chart"></div>`;
+    sessionsHtml += `<div class="trend-legend">`;
     for (const [screen, color] of Object.entries(SCREEN_COLORS)) {
       if (byScreen[screen]?.length) {
-        html += `<div class="legend-item"><div class="legend-dot" style="background:${color}"></div>${screen.charAt(0).toUpperCase() + screen.slice(1)}</div>`;
+        sessionsHtml += `<div class="legend-item"><div class="legend-dot" style="background:${color}"></div>${screen.charAt(0).toUpperCase() + screen.slice(1)}</div>`;
       }
     }
-    html += `</div>`;
+    sessionsHtml += `</div>`;
   } else {
-    html += `<p class="empty-state">No assessments yet. Record your first movement screen to see your trend.</p>`;
+    sessionsHtml += `<p class="empty-state">No assessments yet. Record your first movement screen to see your trend.</p>`;
   }
-  html += `</div>`;
+  sessionsHtml += `</div>`;
 
-  // Assessment list
-  html += `<h2 class="section-title">${assessments.length} Assessment${assessments.length !== 1 ? 's' : ''}</h2>`;
-
+  sessionsHtml += `<h2 class="section-title">${assessments.length} Assessment${assessments.length !== 1 ? 's' : ''}</h2>`;
   if (assessments.length === 0) {
-    html += `<p class="empty-state">No assessments recorded yet.</p>`;
+    sessionsHtml += `<p class="empty-state">No assessments recorded yet.</p>`;
   } else {
-    html += `<div class="assessments-list">`;
+    sessionsHtml += `<div class="assessments-list">`;
     for (const a of assessments) {
       const displayA   = applyDisabledFindings(a);
       const color      = SEV_COLOR[displayA.worst_severity];
       const date  = new Date(a.recorded_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       const screenName = a.screen_type.charAt(0).toUpperCase() + a.screen_type.slice(1);
-      html += `
+      sessionsHtml += `
         <div class="assessment-card">
           <div class="assessment-card-header" data-id="${a.id}">
             <div class="assessment-screen-badge">${SCREEN_INITIAL[a.screen_type] ?? '??'}</div>
@@ -1433,10 +1434,9 @@ function renderHistory(assessments, byScreen, summary) {
         </div>
       `;
     }
-    html += `</div>`;
+    sessionsHtml += `</div>`;
   }
-
-  html += `
+  sessionsHtml += `
     <div class="again-btn-wrap">
       <button class="btn-primary" id="new-assessment-btn">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1445,7 +1445,28 @@ function renderHistory(assessments, byScreen, summary) {
     </div>
   `;
 
+  // ── Assemble ───────────────────────────────────────────────
+  const html = headerHtml + `
+    <div class="settings-tabs prog-tabs">
+      <button class="stab-btn active" data-prog-tab="overview">Overview</button>
+      <button class="stab-btn" data-prog-tab="sessions">Sessions</button>
+    </div>
+    <div class="stab-panel active" id="prog-tab-overview">${overviewHtml}</div>
+    <div class="stab-panel" id="prog-tab-sessions">${sessionsHtml}</div>
+  `;
+
   views.history.innerHTML = html;
+
+  // Tab switching
+  views.history.querySelectorAll('[data-prog-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      views.history.querySelectorAll('[data-prog-tab]').forEach(b => b.classList.remove('active'));
+      views.history.querySelectorAll('.stab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`prog-tab-${btn.dataset.progTab}`)?.classList.add('active');
+    });
+  });
+
   document.getElementById('new-assessment-btn').addEventListener('click', resetApp);
 
   // Delete buttons — tap once to arm, tap again within 3s to confirm
@@ -1549,7 +1570,8 @@ function drawTrendChart(container, byScreen) {
   const H   = 160;
   const PAD = { top: 12, right: 16, bottom: 28, left: 44 };
   const SEV_NUM = { A: 0, B: 0.5, C: 1, D: 2, E: 2.5, F: 3, none: 0, mild: 1, moderate: 2, severe: 3 };
-  const YLABELS = ['Pass', 'Mild', 'Mod', 'Severe'];
+  // Labels from top (i=3) to bottom (i=0): Pass at top = good, Severe at bottom = bad
+  const YLABELS = ['Severe', 'Mod', 'Mild', 'Pass'];
 
   const allPoints = Object.values(byScreen).flat();
   if (!allPoints.length) return;
@@ -1560,7 +1582,8 @@ function drawTrendChart(container, byScreen) {
   const cH = H - PAD.top - PAD.bottom;
 
   const xS = t => PAD.left + (minT === maxT ? cW / 2 : ((t - minT) / (maxT - minT)) * cW);
-  const yS = s => PAD.top + cH - (SEV_NUM[s] / 3) * cH;
+  // A(0) → top of chart (good); F(3) → bottom (bad). Improvement = line goes up.
+  const yS = s => PAD.top + (SEV_NUM[s] / 3) * cH;
 
   let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;overflow:visible">`;
 
@@ -3208,7 +3231,7 @@ function wireDisputeButtons(container, findingNames, onDisputeChange) {
   });
 }
 
-function wireAdaptiveBtn(container) {
+function wireAdaptiveBtn(container, onApply) {
   container.querySelectorAll('.adaptive-recalib-btn').forEach(btn => {
     btn.addEventListener('click', () => loadSettings('advanced'));
   });
@@ -3220,6 +3243,7 @@ function wireAdaptiveBtn(container) {
       btn.disabled = true;
       btn.style.opacity = '0.6';
       showToast(`Grade B threshold updated to ${value}`);
+      if (onApply) onApply();
     });
   });
 }
@@ -3343,11 +3367,50 @@ function missedFindingsPanelHtml(currentFindingNames, recordedAt) {
   `;
 }
 
-function wireMissedPanel(container, currentFindingNames, onSuggestChange) {
+function wireMissedPanel(container, currentFindingNames, onSuggestChange, onApply) {
   const toggle = container.querySelector('.missed-toggle-btn');
   const panel  = container.querySelector('.missed-panel');
   if (toggle && panel) {
     toggle.addEventListener('click', () => panel.classList.toggle('hidden'));
+  }
+
+  function wireApplyBtns(el) {
+    el.querySelectorAll('.sugg-apply-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const { key, value } = btn.dataset;
+        saveThresholdOverrides({ [key]: parseFloat(value) });
+        btn.textContent = 'Applied ✓';
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        showToast(`Grade B threshold updated to ${value}`);
+        if (onApply) onApply();
+      });
+    });
+  }
+
+  function refreshCalibRows() {
+    if (!panel) return;
+    let rows = panel.querySelector('.missed-calib-rows');
+    if (!rows) {
+      rows = document.createElement('div');
+      rows.className = 'missed-calib-rows';
+      panel.appendChild(rows);
+    }
+    const selected = panel.querySelectorAll('.suggest-pill.is-suggested');
+    if (selected.length === 0) { rows.innerHTML = ''; return; }
+    let html = '';
+    for (const pill of selected) {
+      const thresh = computeSuggestedThresholdFromSuggestion(pill.dataset.baseType);
+      if (!thresh) continue;
+      html += `
+        <div class="missed-calib-row">
+          <span class="missed-calib-label">${pill.dataset.baseType}</span>
+          <span class="missed-calib-thresh">Grade B: <strong>${thresh.suggested}</strong> <span class="adaptive-current">(current: ${thresh.current})</span></span>
+          <button class="sugg-apply-btn" data-key="${thresh.key}" data-value="${thresh.suggested}">Apply</button>
+        </div>`;
+    }
+    rows.innerHTML = html;
+    wireApplyBtns(rows);
   }
 
   container.querySelectorAll('.suggest-pill').forEach(btn => {
@@ -3360,12 +3423,15 @@ function wireMissedPanel(container, currentFindingNames, onSuggestChange) {
         addSuggestion(baseType, recordedAt);
         btn.classList.add('is-suggested');
       }
+      refreshCalibRows();
       if (onSuggestChange) onSuggestChange();
     });
   });
 
-  // Wire apply button for suggestion banner
+  // Wire apply button for suggestion banner (outside the missed panel)
   container.querySelectorAll('.sugg-apply-btn').forEach(btn => {
+    // Skip buttons inside missed-calib-rows — those are handled by wireApplyBtns
+    if (btn.closest('.missed-calib-rows')) return;
     btn.addEventListener('click', () => {
       const { key, value } = btn.dataset;
       saveThresholdOverrides({ [key]: parseFloat(value) });
@@ -3373,6 +3439,7 @@ function wireMissedPanel(container, currentFindingNames, onSuggestChange) {
       btn.disabled = true;
       btn.style.opacity = '0.6';
       showToast(`Grade B threshold updated to ${value}`);
+      if (onApply) onApply();
     });
   });
 }
