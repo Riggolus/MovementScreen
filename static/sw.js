@@ -1,4 +1,4 @@
-const CACHE = 'movementscreen-v50';
+const CACHE = 'movementscreen-v51';
 
 const ASSETS = [
   '/',

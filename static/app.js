@@ -162,7 +162,7 @@ const SCREEN_INSTRUCTIONS = {
       'Lower until thighs are parallel (or as deep as comfortable)',
       'Perform 3–5 slow, controlled reps',
     ],
-    camera: 'Anterior view: best for knee valgus and trunk shift. Lateral view: best for ankle mobility and trunk lean.',
+    camera: 'Set the camera at hip height (~90–100 cm). Anterior view: best for knee valgus and trunk shift. Lateral view: best for ankle mobility and trunk lean.',
   },
   lunge: {
     title: 'Split Squat',
@@ -175,19 +175,19 @@ const SCREEN_INSTRUCTIONS = {
       'Keep your torso upright — avoid leaning forward',
       'Push back to start and perform 3–5 controlled reps',
     ],
-    camera: 'Stand 1.5–2 m from the phone so your full body stays in frame at the bottom of the movement. Anterior view: best for knee tracking and trunk shift. Lateral view: best for ankle mobility and trunk lean.',
+    camera: 'Set the camera at hip height (~90–100 cm). Stand 1.5–2 m away so your full body stays in frame at the bottom. Anterior view: best for knee tracking and trunk shift. Lateral view: best for ankle mobility and trunk lean.',
   },
   overhead: {
     title: 'Overhead Reach',
-    desc: 'Stand tall and raise both arms directly overhead as high as possible. Keep your core braced and avoid arching your lower back. Lower with control and repeat.',
+    desc: 'Stand tall and raise both arms directly overhead as high as possible. Keep your core braced and avoid arching your lower back or flaring your ribs. Lower with control and repeat.',
     cues: [
-      'Stand with feet hip-width apart',
-      'Raise both arms simultaneously, reaching as high as possible',
+      'Stand with feet hip-width apart, arms at your sides',
+      'Raise both arms simultaneously — reach as high as possible',
       'Keep your lower back neutral — do not arch or flare your ribs',
-      'Aim to get arms fully vertical beside your ears',
+      'Aim to get arms fully vertical, inline with your ears',
       'Perform 3–5 slow, controlled reps',
     ],
-    camera: 'Anterior view: captures shoulder asymmetry. Lateral view: captures trunk extension compensation.',
+    camera: 'Set the camera at chest height (~120 cm) so your raised arms stay fully in frame. Anterior view: captures shoulder asymmetry. Lateral view: captures trunk extension and rib flare.',
   },
   gait: {
     title: 'Gait Analysis',
@@ -2899,16 +2899,66 @@ function disputeBtnHtml(findingName, metricValue, recordedAt) {
   </button>`;
 }
 
+// Maps finding base type → Grade B threshold key + direction
+// Used to compute an auto-suggested threshold from disputed metric values.
+const FINDING_THRESHOLD_B = {
+  'Knee Valgus':                  { key: 'knee_valgus_b',      lowerIsWorse: false },
+  'Knee Varus':                   { key: 'knee_varus_b',       lowerIsWorse: false },
+  'Heel Rise':                    { key: 'heel_rise_b',        lowerIsWorse: false },
+  'Foot Pronation':               { key: 'foot_pronation_b',   lowerIsWorse: false },
+  'Foot Supination':              { key: 'foot_supination_b',  lowerIsWorse: false },
+  'Restricted Dorsiflexion':      { key: 'tibial_angle_b',     lowerIsWorse: true  },
+  'Reduced Ankle Dorsiflexion':   { key: 'gait_tibial_b',      lowerIsWorse: true  },
+  'Pelvic Tilt':                  { key: 'pelvic_tilt_b',      lowerIsWorse: false },
+  'Lateral Trunk Flexion':        { key: 'lateral_flexion_b',  lowerIsWorse: false },
+  'Shoulder Tilt':                { key: 'shoulder_tilt_b',    lowerIsWorse: false },
+  'Hip Lateral Shift':            { key: 'hip_shift_b',        lowerIsWorse: false },
+  'Excessive Forward Trunk Lean': { key: 'squat_trunk_lean_b', lowerIsWorse: false },
+  'Forward Trunk Lean':           { key: 'trunk_lean_b',       lowerIsWorse: false },
+  'Head Forward Posture':         { key: 'head_forward_b',     lowerIsWorse: false },
+  'Upper Trunk Flexion':          { key: 'upper_trunk_b',      lowerIsWorse: false },
+  'Spinal Segmental Curvature':   { key: 'spine_curve_b',      lowerIsWorse: false },
+};
+
+/**
+ * Compute a suggested Grade B threshold from disputed metric values.
+ * For higher-is-worse: suggest = max(disputed) × 1.10 (10 % above worst false-positive).
+ * For lower-is-worse:  suggest = min(disputed) × 0.90 (10 % more lenient than worst false-positive).
+ * Returns { key, current, suggested } or null if not computable.
+ */
+function computeSuggestedThreshold(suggestion) {
+  const mapping = FINDING_THRESHOLD_B[suggestion.baseType];
+  if (!mapping) return null;
+  const vals = suggestion.disputes.map(d => d.metricValue).filter(v => v != null && Number.isFinite(v));
+  if (!vals.length) return null;
+  const current = getThresholds()[mapping.key];
+  const suggested = mapping.lowerIsWorse
+    ? Math.round(Math.min(...vals) * 0.90 * 1000) / 1000
+    : Math.round(Math.max(...vals) * 1.10 * 1000) / 1000;
+  return { key: mapping.key, current, suggested };
+}
+
 function adaptiveBannerHtml(suggestion) {
   if (!suggestion) return '';
+  const thresh = computeSuggestedThreshold(suggestion);
+  const suggestLine = thresh
+    ? `<div class="adaptive-suggest">Suggested Grade B threshold: <strong>${thresh.suggested}</strong> <span class="adaptive-current">(current: ${thresh.current})</span></div>`
+    : '';
+  const applyBtn = thresh
+    ? `<button class="adaptive-apply-btn" data-key="${thresh.key}" data-value="${thresh.suggested}">Apply</button>`
+    : '';
   return `
     <div class="adaptive-banner" id="adaptive-banner">
       <div class="adaptive-banner-inner">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
         <div class="adaptive-banner-text">
-          <strong>${suggestion.baseType}</strong> has been disputed ${suggestion.count} time${suggestion.count !== 1 ? 's' : ''} — this threshold may be too sensitive for you.
+          <strong>${suggestion.baseType}</strong> disputed ${suggestion.count} time${suggestion.count !== 1 ? 's' : ''} — threshold may be too sensitive for you.
+          ${suggestLine}
         </div>
-        <button class="adaptive-recalib-btn btn-ghost" data-base-type="${suggestion.baseType}">Recalibrate</button>
+        <div class="adaptive-banner-actions">
+          ${applyBtn}
+          <button class="adaptive-recalib-btn" data-base-type="${suggestion.baseType}">Adjust</button>
+        </div>
       </div>
     </div>
   `;
@@ -2943,6 +2993,16 @@ function wireDisputeButtons(container, findingNames, onDisputeChange) {
 function wireAdaptiveBtn(container) {
   container.querySelectorAll('.adaptive-recalib-btn').forEach(btn => {
     btn.addEventListener('click', () => loadSettings('advanced'));
+  });
+  container.querySelectorAll('.adaptive-apply-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { key, value } = btn.dataset;
+      saveThresholdOverrides({ [key]: parseFloat(value) });
+      btn.textContent = 'Applied ✓';
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+      showToast(`Grade B threshold updated to ${value}`);
+    });
   });
 }
 

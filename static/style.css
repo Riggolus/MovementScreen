@@ -405,13 +405,18 @@ body {
 }
 .adaptive-banner-inner > svg { flex-shrink: 0; color: var(--primary); }
 .adaptive-banner-text { flex: 1; font-size: 13px; color: var(--text-2); line-height: 1.4; }
-.adaptive-recalib-btn {
+.adaptive-banner-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.adaptive-suggest { font-size: 12px; margin-top: 4px; color: var(--text-2); }
+.adaptive-current { color: var(--text-3); }
+.adaptive-recalib-btn, .adaptive-apply-btn {
   font-size: 12px; padding: 6px 12px; border-radius: var(--r-sm);
   border: 1.5px solid var(--primary); color: var(--primary);
   background: none; font-weight: 600; cursor: pointer; white-space: nowrap;
   font-family: inherit; transition: all .15s;
 }
+.adaptive-apply-btn { background: var(--primary); color: #fff; border-color: var(--primary); }
 .adaptive-recalib-btn:hover { background: var(--primary); color: #fff; }
+.adaptive-apply-btn:hover { opacity: .85; }
 .side-asym-badge {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 11px; font-weight: 600; color: #b45309;
